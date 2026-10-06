@@ -73,7 +73,10 @@ function AdminPage() {
       daily_limit: Math.max(1, s.daily_limit || 1),
       updated_at: new Date().toISOString(),
     }).eq("id", 1);
-    const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }));
+    const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
+    const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
+      .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
+    setPool(cleanPool);
     const r2 = await supabase.from("ai_keys").update({ google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }).eq("id", 1);
     const err = r1.error || r2.error;
     setStatus(err ? `ত্রুটি: ${err.message}` : "✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
@@ -207,7 +210,7 @@ function AdminPage() {
 }
 
 function DriveMemory() {
-  const [items, setItems] = useState<{ text: string }[] | null>(null);
+  const [items, setItems] = useState<{ id: string; text: string }[] | null>(null);
   const [err, setErr] = useState("");
   const [text, setText] = useState("");
   const call = async (body: object) => {
@@ -225,15 +228,15 @@ function DriveMemory() {
   useEffect(() => { call({ action: "list" }); }, []);
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <h2 className="font-display text-xl text-primary">৮. গুগল ড্রাইভ স্মৃতি</h2>
-      <p className="mt-1 text-sm text-muted-foreground">এআই যা স্থায়ীভাবে মনে রাখে। ভুল কিছু থাকলে মুছে দিন।</p>
+      <h2 className="font-display text-xl text-primary">৮. দীর্ঘমেয়াদী স্মৃতি (আপনার অ্যাকাউন্ট)</h2>
+      <p className="mt-1 text-sm text-muted-foreground">এআই আপনার সম্পর্কে যা নিরাপদে মনে রাখে — যেকোনো ডিভাইস বা চ্যাট থেকে। ভুল কিছু থাকলে মুছে দিন।</p>
       {err && <p className="mt-3 text-sm text-destructive">{err}</p>}
       {!items && !err && <p className="mt-3 text-sm text-muted-foreground">লোড হচ্ছে…</p>}
       <ul className="mt-3 space-y-2">
-        {items?.map((m, i) => (
-          <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+        {items?.map((m) => (
+          <li key={m.id} className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
             <span>{m.text}</span>
-            <button onClick={() => call({ action: "delete", index: i })} className="text-destructive">মুছুন</button>
+            <button onClick={() => call({ action: "delete", id: m.id })} className="text-destructive">মুছুন</button>
           </li>
         ))}
         {items?.length === 0 && <li className="text-sm text-muted-foreground">এখনো কোনো স্মৃতি নেই।</li>}
@@ -254,9 +257,9 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
   const upd = (i: number, patch: Partial<PoolKey>) => setPool(pool.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <h2 className="font-display text-xl text-primary">৪ক. অতিরিক্ত এপিআই কী (আনলিমিটেড)</h2>
+      <h2 className="font-display text-xl text-primary">৪ক. ব্যাকআপ এপিআই কী (সর্বোচ্চ ২টি)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        যত খুশি কী যোগ করুন, নিজের দেওয়া নামে। মূল কী কাজ না করলে (লিমিট শেষ হলে) এআই নিজে থেকেই তালিকার পরের কী দিয়ে চেষ্টা করবে। "অন্য সেবা" দিয়ে Groq, DeepSeek, OpenRouter-এর মতো যেকোনো সেবা যোগ করা যায়। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
+        সর্বোচ্চ ২টি ব্যাকআপ কী রাখা যায়; একই কী দুবার থাকলে সংরক্ষণের সময় স্বয়ংক্রিয়ভাবে বাদ যাবে। মূল কী কাজ না করলে (লিমিট শেষ হলে) এআই নিজে থেকেই তালিকার পরের কী দিয়ে চেষ্টা করবে। "অন্য সেবা" দিয়ে Groq, DeepSeek, OpenRouter-এর মতো যেকোনো সেবা যোগ করা যায়। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
       </p>
       <div className="mt-4 space-y-3">
         {pool.map((p, i) => (
@@ -285,8 +288,8 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
           </div>
         ))}
       </div>
-      <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
-        className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm text-primary">+ নতুন কী যোগ করুন</button>
+      {pool.length < 2 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
+        className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm text-primary">+ নতুন কী যোগ করুন</button>}
     </section>
   );
 }
