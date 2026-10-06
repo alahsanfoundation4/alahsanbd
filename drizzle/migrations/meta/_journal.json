@@ -8,6 +8,13 @@
       "when": 1791272141350,
       "tag": "0000_init_alahsan_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791272167600,
+      "tag": "0001_ai_settings_extra_columns",
+      "breakpoints": true
     }
   ]
 }

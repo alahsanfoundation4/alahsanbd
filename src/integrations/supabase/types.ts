@@ -40,36 +40,45 @@ export type Database = {
       }
       ai_settings: {
         Row: {
+          admin_note: string
           chat_enabled: boolean
           id: number
           model: string
           provider: string
+          reasoning_effort: string
           site_builder: boolean
           suggestions: string
+          system_prompt: string
           updated_at: string
           url_reader: boolean
           welcome_subtitle: string
           welcome_title: string
         }
         Insert: {
+          admin_note?: string
           chat_enabled?: boolean
           id?: number
           model?: string
           provider?: string
+          reasoning_effort?: string
           site_builder?: boolean
           suggestions?: string
+          system_prompt?: string
           updated_at?: string
           url_reader?: boolean
           welcome_subtitle?: string
           welcome_title?: string
         }
         Update: {
+          admin_note?: string
           chat_enabled?: boolean
           id?: number
           model?: string
           provider?: string
+          reasoning_effort?: string
           site_builder?: boolean
           suggestions?: string
+          system_prompt?: string
           updated_at?: string
           url_reader?: boolean
           welcome_subtitle?: string
