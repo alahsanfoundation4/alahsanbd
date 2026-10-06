@@ -42,6 +42,8 @@ export type Database = {
         Row: {
           admin_note: string
           chat_enabled: boolean
+          daily_limit: number
+          hourly_limit: number
           id: number
           model: string
           provider: string
@@ -57,6 +59,8 @@ export type Database = {
         Insert: {
           admin_note?: string
           chat_enabled?: boolean
+          daily_limit?: number
+          hourly_limit?: number
           id?: number
           model?: string
           provider?: string
@@ -72,6 +76,8 @@ export type Database = {
         Update: {
           admin_note?: string
           chat_enabled?: boolean
+          daily_limit?: number
+          hourly_limit?: number
           id?: number
           model?: string
           provider?: string
