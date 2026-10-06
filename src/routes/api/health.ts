@@ -87,7 +87,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   },
   async memory(c) {
     const { error } = await c.admin.from("user_memories").select("id", { head: true, count: "exact" });
-    if (error) return void c.issues.push({ id: "memory", area: "স্মৃতি", title: "দীর্ঘমেয়াদী স্মৃতি পড়া যাচ্ছে না", detail: error.message, fix: undefined });
+    if (error) return void c.issues.push({ id: "memory", area: "স্মৃতি", title: "দীর্ঘমেয়াদী স্মৃতি পড়া যাচ্ছে না", detail: error.message });
     c.passed.push("দীর্ঘমেয়াদী স্মৃতি (ডাটাবেস)");
   },
   async search(c) {
