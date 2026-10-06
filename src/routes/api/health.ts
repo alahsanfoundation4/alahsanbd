@@ -11,7 +11,7 @@ const FOUNDER = "alahsanfoundation.info@gmail.com";
 const GOOGLE_CHAT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-3-flash-preview"];
 const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-const TABLES = ["ai_settings", "ai_keys", "conversations", "messages", "pages", "health_checks", "chat_usage", "user_roles"];
+const TABLES = ["ai_settings", "ai_keys", "conversations", "messages", "pages", "health_checks", "chat_usage", "user_roles", "user_memories"];
 
 async function chatCall(url: string, key: string, model: string, content: unknown) {
   const r = await fetch(url, {
@@ -85,14 +85,26 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       c.issues.push({ id: `pool:${i}`, area: "কী-পুল", title: `"${p.name || `কী ${i + 1}`}" কাজ করছে না — ${classify(r.status, r.text)}`, detail: `${model}: ${r.text.slice(0, 140)}`, ...(temp ? {} : { fix: `disable_pool:${i}`, fixLabel: "সমাধান করুন" }) });
     }));
   },
-  async drive(c) {
-    const m = await import("@/lib/drive-memory.server");
-    if (!m.driveConfigured()) return void c.issues.push({ id: "drive:off", area: "গুগল ড্রাইভ", title: "গুগল ড্রাইভ সংযুক্ত নেই", detail: "সংযোগ নেই" });
-    const { items } = await m.loadMemory(true);
-    await m.saveMemory(items); // real write round-trip
-    const back = await m.loadMemory(true);
-    if (back.items.length !== items.length) throw new Error("লেখার পর পড়ে মিলছে না");
-    c.passed.push(`গুগল ড্রাইভ (পড়া+লেখা, ${items.length}টি স্মৃতি)`);
+  async memory(c) {
+    const { error } = await c.admin.from("user_memories").select("id", { head: true, count: "exact" });
+    if (error) return void c.issues.push({ id: "memory", area: "স্মৃতি", title: "দীর্ঘমেয়াদী স্মৃতি পড়া যাচ্ছে না", detail: error.message, fix: undefined });
+    c.passed.push("দীর্ঘমেয়াদী স্মৃতি (ডাটাবেস)");
+  },
+  async search(c) {
+    const r = await fetch("https://html.duckduckgo.com/html/?q=bangladesh", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+    if (r?.ok && /result__a/.test(await r.text())) return void c.passed.push("ওয়েব অনুসন্ধান");
+    c.issues.push({ id: "search", area: "ওয়েব অনুসন্ধান", title: "ওয়েব অনুসন্ধান সাড়া দিচ্ছে না", detail: `স্ট্যাটাস ${r?.status ?? "নেটওয়ার্ক"} — সাম্প্রতিক প্রশ্নে এআই সতর্কতা দিয়ে উত্তর দেবে`, });
+  },
+  async gateway(c) {
+    if (!process.env["LOVABLE_API_KEY"]) return void c.issues.push({ id: "gw:nokey", area: "বিল্ট-ইন এআই", title: "বিল্ট-ইন এআই কী নেই", detail: "ছবি তৈরি, স্মৃতি ও ব্যাকআপ উত্তর কাজ করবে না" });
+    c.passed.push("বিল্ট-ইন এআই (ছবি/স্মৃতি/ব্যাকআপ) প্রস্তুত");
+  },
+  async keys(c) {
+    const pool: any[] = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
+    const all = [c.keys?.google_key, c.keys?.openai_key, ...pool.map((p) => p?.key)].map((k) => String(k ?? "").trim()).filter(Boolean);
+    if (new Set(all).size !== all.length) c.issues.push({ id: "keys:dup", area: "কী", title: "একই এপিআই কী একাধিকবার আছে", detail: "সেটিংসে গিয়ে সংরক্ষণ করুন — ডুপ্লিকেট স্বয়ংক্রিয়ভাবে বাদ যাবে" });
+    else if (pool.length > 2) c.issues.push({ id: "keys:many", area: "কী", title: `ব্যাকআপ কী ${pool.length}টি — সর্বোচ্চ ২টি রাখুন`, detail: "সেটিংসে সংরক্ষণ করলে প্রথম ২টি থাকবে" });
+    else c.passed.push("এপিআই কী ব্যবস্থাপনা");
   },
   async admin(c) {
     const { data } = await c.admin.auth.admin.listUsers({ perPage: 1000 });
