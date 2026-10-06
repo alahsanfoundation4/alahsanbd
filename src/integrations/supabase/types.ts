@@ -14,16 +14,224 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_keys: {
+        Row: {
+          google_key: string
+          id: number
+          key_pool: Json
+          openai_key: string
+          updated_at: string
+        }
+        Insert: {
+          google_key?: string
+          id?: number
+          key_pool?: Json
+          openai_key?: string
+          updated_at?: string
+        }
+        Update: {
+          google_key?: string
+          id?: number
+          key_pool?: Json
+          openai_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_settings: {
+        Row: {
+          chat_enabled: boolean
+          id: number
+          model: string
+          provider: string
+          site_builder: boolean
+          suggestions: string
+          updated_at: string
+          url_reader: boolean
+          welcome_subtitle: string
+          welcome_title: string
+        }
+        Insert: {
+          chat_enabled?: boolean
+          id?: number
+          model?: string
+          provider?: string
+          site_builder?: boolean
+          suggestions?: string
+          updated_at?: string
+          url_reader?: boolean
+          welcome_subtitle?: string
+          welcome_title?: string
+        }
+        Update: {
+          chat_enabled?: boolean
+          id?: number
+          model?: string
+          provider?: string
+          site_builder?: boolean
+          suggestions?: string
+          updated_at?: string
+          url_reader?: boolean
+          welcome_subtitle?: string
+          welcome_title?: string
+        }
+        Relationships: []
+      }
+      chat_usage: {
+        Row: {
+          created_at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_checks: {
+        Row: {
+          created_at: string
+          id: number
+          results: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          results: Json
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          results?: Json
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pages: {
+        Row: {
+          created_at: string
+          html: string
+          id: string
+          num: number
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          html: string
+          id?: string
+          num?: never
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          html?: string
+          id?: string
+          num?: never
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +358,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
