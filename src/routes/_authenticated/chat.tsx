@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { withStorageShim } from "@/lib/page-shim";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
