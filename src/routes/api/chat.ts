@@ -35,6 +35,15 @@ const PERSONA = `## তোমার ব্যক্তিত্ব ও কঠো
 - ব্যবহারকারীর লক্ষ্যের দিকে খেয়াল রাখো: তাঁর প্রস্তাবে ঝুঁকি বা ভালো বিকল্প থাকলে সংক্ষেপে বলে দাও — অন্ধভাবে মেনে নেবে না, আবার অযথা তর্কও করবে না।
 - কোডে: আগে কাঠামো ভাবো, তারপর সম্পূর্ণ, পরীক্ষাযোগ্য কোড দাও; কোথায় কী বদলাতে হবে তা স্পষ্ট বলো।
 - নিজের সীমা সৎভাবে জানো: যা জানো না তা বানাবে না, কিন্তু যা পারো তা পূর্ণ আত্মবিশ্বাসে সম্পূর্ণ করবে।
+
+## সক্ষমতা (কখনো অস্বীকার করবে না)
+- এই সিস্টেম তোমার জন্য সরাসরি ইন্টারনেট অনুসন্ধান করে ও লিংকের পেজ পড়ে দেয়। তাই কখনো বলবে না "আমি ইন্টারনেট ব্রাউজ করতে পারি না" বা "আমার রিয়েল-টাইম তথ্য নেই"। অনুসন্ধানের ফলাফল দেওয়া থাকলে সেটি ব্যবহার করবে; ফলাফলে তথ্য না থাকলে সৎভাবে বলবে নিশ্চিত তথ্য পাওয়া যায়নি।
+- তোমার তৈরি ওয়েবসাইট চ্যাটের ভেতরেই সরাসরি চলে এবং স্থায়ী লাইভ লিংক পায়; কখনো বলবে না "আমি ওয়েবসাইট চালাতে পারি না"।
+- উত্তর ভয়েসে পড়ে শোনানো হয়, তাই পরিষ্কার বাক্যে লিখবে।
+
+## লেখার ধরন
+- উত্তরে কোনো ইমোজি বা সাজসজ্জার চিহ্ন (যেমন ✅ ❌ 🔍 🚀 ✨ ⭐ 👉) ব্যবহার করবে না। প্রয়োজনে সাধারণ তালিকা বা সংখ্যা ব্যবহার করবে।
+- ব্যবহারকারী ভুল বললে তোষামোদ না করে ভদ্রভাবে সঠিক তথ্য দেবে।
 `;
 
 const BASE_PROMPT = `তুমি "আল আহসান এআই" (Al Ahsan AI) — মুহিউস সুন্নাহ ফাউন্ডেশন বাংলাদেশ কর্তৃক তৈরি একটি অত্যন্ত শক্তিশালী, জ্ঞানী ও বিনয়ী সহকারী।
@@ -213,8 +222,9 @@ export const Route = createFileRoute("/api/chat")({
 
         if (provider === "lovable" && model.startsWith("openai/gpt-5.6")) body["reasoning_effort"] = "none";
         if (provider === "lovable" && model === "openai/gpt-6-astra") {
-          const eff = s?.reasoning_effort ?? "medium";
-          body["reasoning_effort"] = ["low", "medium", "high", "xhigh"].includes(eff) ? eff : "medium";
+          // দ্রুত প্রথম সাড়ার জন্য ডিফল্ট low
+          const eff = s?.reasoning_effort ?? "low";
+          body["reasoning_effort"] = ["low", "medium", "high", "xhigh"].includes(eff) ? eff : "low";
         }
 
         type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
@@ -235,12 +245,16 @@ export const Route = createFileRoute("/api/chat")({
 
         for (const a of attempts) {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
+          // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort(), attempts.length > 1 ? 20000 : 45000);
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
             body: JSON.stringify({ ...body, model: a.model }),
-            signal: AbortSignal.timeout(60000),
-          }).catch((e) => new Response(String(e?.name === "TimeoutError" ? "timeout" : e), { status: e?.name === "TimeoutError" ? 504 : 502 }));
+            signal: ac.signal,
+          }).catch((e) => new Response(String(e?.name === "AbortError" ? "timeout" : e), { status: e?.name === "AbortError" ? 504 : 502 }));
+          clearTimeout(timer);
           if (res.ok && res.body) break;
           const t = (await res.text()).slice(0, 500);
           realErr ??= { status: res.status, text: t };

@@ -119,16 +119,56 @@ function downloadChat(msgs: Msg[]) {
   a.click();
 }
 
+function stripEmoji(t: string): string {
+  return t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "");
+}
+
+function pickVoice(bn: boolean): SpeechSynthesisVoice | undefined {
+  const all = window.speechSynthesis.getVoices();
+  if (bn) return all.find((x) => /^bn[-_]BD/i.test(x.lang)) || all.find((x) => /^bn/i.test(x.lang)) || all.find((x) => /^(hi|en)[-_]IN/i.test(x.lang));
+  return all.find((x) => /^en/i.test(x.lang));
+}
+
+// বাক্যভিত্তিক ছোট টুকরোয় পড়া — লম্বা লেখা একবারে দিলে অনেক ব্রাউজারে ভয়েস থেমে যায়
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const clean = text.replace(/[#*`_>|-]/g, " ").slice(0, 4000);
-  const u = new SpeechSynthesisUtterance(clean);
-  const bn = /[\u0980-\u09FF]/.test(clean);
-  u.lang = bn ? "bn-BD" : "en-US";
-  const v = window.speechSynthesis.getVoices().find((x) => x.lang.startsWith(bn ? "bn" : "en"));
-  if (v) u.voice = v;
-  window.speechSynthesis.speak(u);
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const clean = stripEmoji(text)
+    .replace(/```[\s\S]*?(```|$)/g, " কোড অংশ। ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[#*`_>|~]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 6000);
+  if (!clean) return;
+  const parts = clean.match(/[^।.!?\n]+[।.!?]?/g) || [clean];
+  const chunks: string[] = [];
+  let cur = "";
+  for (const p of parts) {
+    if ((cur + p).length > 180 && cur) { chunks.push(cur); cur = p; } else cur += p;
+  }
+  if (cur.trim()) chunks.push(cur);
+  const run = () => {
+    chunks.forEach((c) => {
+      const u = new SpeechSynthesisUtterance(c.trim());
+      const bn = /[\u0980-\u09FF]/.test(c);
+      u.lang = bn ? "bn-BD" : "en-US";
+      const v = pickVoice(bn);
+      if (v) u.voice = v;
+      u.rate = 1;
+      synth.speak(u);
+    });
+  };
+  if (synth.getVoices().length) run();
+  else {
+    let done = false;
+    const go = () => { if (!done) { done = true; run(); } };
+    synth.addEventListener("voiceschanged", go, { once: true });
+    setTimeout(go, 600);
+  }
 }
 
 function ChatPage() {
@@ -426,7 +466,7 @@ function ChatPage() {
                       {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
                       {m.content ? (
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={loading && i === msgs.length - 1 ? mdStreaming : mdDone}>{m.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={loading && i === msgs.length - 1 ? mdStreaming : mdDone}>{stripEmoji(m.content)}</ReactMarkdown>
                           <div className="mt-1 flex gap-3 text-muted-foreground">
                             <button onClick={() => copy(m.content, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
                             <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(m.content); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
