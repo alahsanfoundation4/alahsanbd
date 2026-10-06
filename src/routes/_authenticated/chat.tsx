@@ -67,7 +67,7 @@ function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean })
         <button onClick={openFull} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary"><Maximize2 size={14} /> বড় করে</button>
       </div>
       {tab === "run" ? (
-        <iframe title="ওয়েবসাইট প্রিভিউ" srcDoc={code} sandbox="allow-scripts allow-forms allow-modals allow-popups" className="h-[70vh] min-h-[520px] w-full bg-white sm:h-[80vh] sm:min-h-[650px]" />
+        <iframe title="ওয়েবসাইট প্রিভিউ" srcDoc={withStorageShim(code)} sandbox="allow-scripts allow-forms allow-modals allow-popups" className="h-[70vh] min-h-[520px] w-full bg-white sm:h-[80vh] sm:min-h-[650px]" />
       ) : (
         <pre className="max-h-[70vh] min-h-[520px] overflow-auto p-3 text-xs sm:max-h-[80vh] sm:min-h-[650px]"><code>{code}</code></pre>
       )}
