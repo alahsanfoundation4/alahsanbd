@@ -216,7 +216,7 @@ export const Route = createFileRoute("/api/chat")({
         const body: Record<string, unknown> = {
           model,
           stream: true,
-          max_tokens: 8192, // পূর্ণাঙ্গ ওয়েবসাইটের জন্য পর্যাপ্ত টোকেন
+          max_tokens: 32000, // পূর্ণাঙ্গ ওয়েবসাইট যেন মাঝপথে কেটে না যায়
           messages: [{ role: "system", content: system }, ...msgs],
         };
 
