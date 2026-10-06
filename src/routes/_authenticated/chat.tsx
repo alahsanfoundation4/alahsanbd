@@ -4,17 +4,17 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus } from "lucide-react";
 
-const STEPS = ["বোঝা", "পরিকল্পনা", "নির্মাণ", "যাচাই", "সংশোধন", "প্রিভিউ"];
-function WorkflowStepper({ stage }: { stage: number }) {
+const STAGE_LABEL: Record<string, string> = { think: "চিন্তা করছে", search: "ওয়েবে অনুসন্ধান", image: "ছবি তৈরি", code: "কোড তৈরি", write: "উত্তর লিখছে", build: "ওয়েবসাইট তৈরি ও লাইভ", test: "যাচাই", done: "সম্পন্ন" };
+function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
   return (
-    <div className="not-prose mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-wide">
-      {STEPS.map((s, i) => (
-        <span key={s} className="flex items-center gap-2">
-          <span className={`flex items-center gap-1.5 ${i < stage ? "text-primary" : i === stage ? "text-foreground" : "text-muted-foreground/50"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${i < stage ? "bg-primary" : i === stage ? "animate-pulse bg-primary" : "bg-muted-foreground/30"}`} />
-            {s}
+    <div className="not-prose mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-wide animate-in fade-in">
+      {stages.map((s, i) => (
+        <span key={s + i} className="flex items-center gap-2">
+          <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 transition-all duration-500 ${i < current ? "text-primary" : i === current ? "bg-primary/10 text-foreground" : "text-muted-foreground/50"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${i < current ? "bg-primary" : i === current ? "animate-ping bg-primary" : "bg-muted-foreground/30"}`} />
+            {STAGE_LABEL[s] ?? s}
           </span>
-          {i < STEPS.length - 1 && <span className={`h-px w-4 ${i < stage ? "bg-primary/60" : "bg-border"}`} />}
+          {i < stages.length - 1 && <span className={`h-px w-4 transition-colors duration-500 ${i < current ? "bg-primary/60" : "bg-border"}`} />}
         </span>
       ))}
     </div>
@@ -162,7 +162,8 @@ function ChatPage() {
     reader.readAsDataURL(file);
   };
   const [loading, setLoading] = useState(false);
-  const [post, setPost] = useState<number | null>(null);
+  const [flow, setFlow] = useState<{ stages: string[]; current: number } | null>(null);
+  const pushStage = (st: string, finish = false) => setFlow((f) => { const stages = f ? (f.stages.includes(st) ? f.stages : [...f.stages, st]) : [st]; return { stages, current: finish ? stages.length : stages.indexOf(st) }; });
   const [voiceOut, setVoiceOut] = useState(false);
   const [listening, setListening] = useState(false);
   const [sidebar, setSidebar] = useState(false);
@@ -242,7 +243,7 @@ function ChatPage() {
     }
     const history: Msg[] = [...msgs, { role: "user", content: text, ...(img ? { image: img } : {}) }];
     setMsgs([...history, { role: "assistant", content: "" }]);
-    setPost(null);
+    setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
     await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: img ? `[ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
 
@@ -253,7 +254,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => (i === arr.length - 1 ? m : { role: m.role, content: m.content })) }),
+        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const content = m.content.replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return i === arr.length - 1 ? { ...m, content } : { role: m.role, content }; }) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
@@ -266,7 +267,10 @@ function ChatPage() {
         const d = line.slice(5).trim();
         if (!d || d === "[DONE]") return;
         try {
-          const delta = JSON.parse(d).choices?.[0]?.delta?.content;
+          const j = JSON.parse(d);
+          if (j.stage) return pushStage(j.stage);
+          if (j.error) { full += `\n\n${j.error}`; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); return; }
+          const delta = j.choices?.[0]?.delta?.content;
           if (delta) {
             full += delta;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
@@ -289,12 +293,11 @@ function ChatPage() {
       if (e?.name !== "AbortError") full = full || `ত্রুটি: ${e?.message || "ত্রুটি হয়েছে"}`;
       setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
     }
-    setPost(3);
     setLoading(false);
     if (full) {
       const htmlCode = full.match(/```html\s*\n([\s\S]*?)(?:```|$)/i)?.[1];
       if (htmlCode && /<html/i.test(htmlCode)) {
-        setPost(4);
+        pushStage("build");
         try {
           const { data: s2 } = await supabase.auth.getSession();
           const pr = await fetch("/api/pages", {
@@ -307,11 +310,14 @@ function ChatPage() {
             const liveUrl = `${window.location.origin}${url}`;
             full += `\n\n---\n\n### লাইভ লিংক তৈরি হয়েছে\n\n[${liveUrl}](${liveUrl})\n\nলিংকে চাপ দিলেই ওয়েবসাইটটি সরাসরি খুলবে।`;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
+            pushStage("test");
+            const chk = await fetch(url, { method: "HEAD" }).catch(() => null);
+            if (!chk?.ok) { full += `\n\nসতর্কতা: লাইভ লিংক এখনো সাড়া দিচ্ছে না, কিছুক্ষণ পর আবার খুলুন।`; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
           } else {
             full += `\n\nলাইভ লিংক তৈরি করা যায়নি (${pr.status})। আবার চেষ্টা করুন।`;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
           }
-        } catch {}
+        } catch { full += "\n\nলাইভ লিংক তৈরির সময় সংযোগ বিচ্ছিন্ন হয়েছে।"; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
       }
       await supabase.from("messages").insert({ conversation_id: convId, role: "assistant", content: full, user_id: user.id });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
@@ -324,8 +330,8 @@ function ChatPage() {
         }).catch(() => {}),
       );
     }
-    setPost(5);
-    setTimeout(() => setPost(null), 1800);
+    pushStage("done", true);
+    setTimeout(() => setFlow(null), 2500);
     loadConvs();
   };
 
@@ -416,9 +422,7 @@ function ChatPage() {
                     </>
                   ) : (
                     <>
-                      {i === msgs.length - 1 && (loading || post !== null) && (
-                        <WorkflowStepper stage={post ?? (!m.content ? 0 : m.content.length < 300 ? 1 : 2)} />
-                      )}
+                      {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
                       {m.content ? (
                         <>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={loading && i === msgs.length - 1 ? mdStreaming : mdDone}>{m.content}</ReactMarkdown>
