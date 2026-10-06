@@ -43,7 +43,12 @@ ${existing.map((m) => "- " + m.text).join("\n") || "(কিছু নেই)"}
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } }),
+    body: JSON.stringify({
+      model: "openai/gpt-6-astra",
+      reasoning_effort: "low",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_schema", json_schema: { name: "facts", strict: true, schema: { type: "object", additionalProperties: false, required: ["facts"], properties: { facts: { type: "array", items: { type: "object", additionalProperties: false, required: ["text", "kind"], properties: { text: { type: "string" }, kind: { type: "string", enum: ["preference", "profile", "correction"] } } } } } } } },
+    }),
     signal: AbortSignal.timeout(20000),
   }).catch(() => null);
   if (!r?.ok) return [];
