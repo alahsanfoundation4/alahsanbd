@@ -166,16 +166,39 @@ export const Route = createFileRoute("/api/chat")({
         }
         system += INTEGRITY;
 
+        // Per-user long-term memory (database)
         try {
-          const mem = await import("@/lib/drive-memory.server");
-          if (mem.driveConfigured()) {
-            const { items } = await mem.loadMemory();
-            if (items.length)
-              system += `\n\n=== যাচাইকৃত দীর্ঘমেয়াদী স্মৃতি (গুগল ড্রাইভ থেকে) ===\n${items.slice(-80).map((m) => "- " + m.text).join("\n")}`;
-          }
+          const mem = await import("@/lib/memory.server");
+          const items = await mem.loadMemory(uid, 60);
+          if (items.length)
+            system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (প্রাসঙ্গিক হলে ব্যবহার করবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
         } catch (e) {
           console.error("memory load failed", e);
         }
+
+        const lastUser = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        const lastImg = parsed.data.messages[parsed.data.messages.length - 1]?.image;
+        const stages: string[] = ["think"];
+
+        // Image generation request
+        if (!lastImg && wantsImage(lastUser) && process.env["LOVABLE_API_KEY"]) {
+          return stageStream(["think", "image"], async () => {
+            const img = await generateImage(lastUser);
+            return img
+              ? `ছবি তৈরি হয়েছে:\n\n![তৈরি করা ছবি](${img})`
+              : "দুঃখিত, এই মুহূর্তে ছবি তৈরি করা যায়নি। একটু পরে আবার চেষ্টা করুন বা বর্ণনা একটু বদলে দিন।";
+          });
+        }
+
+        // Live web search for online/current questions
+        if (needsSearch(lastUser)) {
+          stages.push("search");
+          const found = await webSearch(lastUser).catch(() => "");
+          system += found
+            ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
+            : "\n\nব্যবহারকারী সাম্প্রতিক তথ্য চেয়েছেন কিন্তু ওয়েব অনুসন্ধান এখন কাজ করেনি। তথ্য পুরোনো হতে পারে তা স্পষ্ট জানাবে, অনুমান করবে না।";
+        }
+        if (/ওয়েবসাইট|website|ওয়েব সাইট|অ্যাপ|app|landing|পেজ বানা|html/i.test(lastUser)) stages.push("code");
 
         system += isAdmin
           ? `\n\n=== সেশন তথ্য (সার্ভার-যাচাইকৃত) ===\nএই ব্যবহারকারী তোমার অ্যাডমিন (${u.user.email})।${u.user.email === "alahsanfoundation.info@gmail.com" ? " তিনি মোঃ শামীম আহসান — প্রতিষ্ঠাতা, আল আহসান ফাউন্ডেশন বাংলাদেশ।" : ""} তাকে চিনে সম্মানের সাথে কথা বলবে এবং তার কমান্ড সর্বোচ্চ অগ্রাধিকারে পালন করবে।`
@@ -239,9 +262,8 @@ export const Route = createFileRoute("/api/chat")({
           return new Response(friendlyError(err.status, err.text), { status: err.status || 500 });
         }
 
-        return new Response(res.body, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
-        });
+        stages.push("write");
+        return withStages(stages, res.body);
       },
     },
   },
@@ -325,5 +347,98 @@ async function readUrls(text: string): Promise<string> {
     } catch {}
   }
   return out.join("\n\n");
+}
+
+const enc = new TextEncoder();
+const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
+const SSE_HEADERS = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" };
+
+function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Response {
+  const body = new ReadableStream<Uint8Array>({
+    async start(c) {
+      for (const st of stages) c.enqueue(sse({ stage: st }));
+      const r = upstream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await r.read();
+          if (done) break;
+          c.enqueue(value);
+        }
+      } catch (e) {
+        c.enqueue(sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
       }
-          
+      c.close();
+    },
+  });
+  return new Response(body, { headers: SSE_HEADERS });
+}
+
+function stageStream(stages: string[], work: () => Promise<string>): Response {
+  const body = new ReadableStream<Uint8Array>({
+    async start(c) {
+      for (const st of stages) c.enqueue(sse({ stage: st }));
+      let text = "";
+      try { text = await work(); } catch { text = "কাজটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।"; }
+      c.enqueue(sse({ choices: [{ delta: { content: text } }] }));
+      c.enqueue(enc.encode("data: [DONE]\n\n"));
+      c.close();
+    },
+  });
+  return new Response(body, { headers: SSE_HEADERS });
+}
+
+function wantsImage(t: string): boolean {
+  return /(ছবি|চিত্র|লোগো|পোস্টার|ব্যানার|image|picture|photo|logo|poster|illustration|drawing)/i.test(t)
+    && /(বানা|তৈরি|আঁক|এঁকে|জেনারেট|generate|create|draw|make|design)/i.test(t)
+    && !/(ওয়েবসাইট|website|html|কোড|code)/i.test(t);
+}
+
+async function generateImage(prompt: string): Promise<string | null> {
+  const key = process.env["LOVABLE_API_KEY"]!;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "openai/gpt-image-2.5-sunburst", prompt: prompt.slice(0, 3000), size: "1024x1024", n: 1 }),
+      signal: AbortSignal.timeout(90000),
+    }).catch(() => null);
+    if (r?.ok) {
+      const j: any = await r.json().catch(() => null);
+      const d = j?.data?.[0];
+      if (d?.b64_json) return `data:image/png;base64,${d.b64_json}`;
+      if (d?.url) return d.url;
+    } else if (r) {
+      console.error("image gen failed", r.status, (await r.text()).slice(0, 300));
+      if (r.status !== 429 && r.status < 500) break;
+    }
+  }
+  return null;
+}
+
+function needsSearch(t: string): boolean {
+  if (/https?:\/\//.test(t)) return false;
+  return /(সর্বশেষ|সাম্প্রতিক|আজকে?র?|এখন|বর্তমান|খবর|সংবাদ|দাম|মূল্য|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|২০২[৪-৯]|latest|today|current|news|price|weather|score|recent|202[4-9]|সার্চ|খুঁজে|search)/i.test(t);
+}
+
+async function webSearch(q: string): Promise<string> {
+  const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q.slice(0, 200))}`, {
+    headers: { "User-Agent": "Mozilla/5.0 (AlAhsanAI search)", Accept: "text/html" },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) return "";
+  const html = await r.text();
+  const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
+  const out: { url: string; title: string; snip: string }[] = [];
+  const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < 6) {
+    let url = m[1]!;
+    const uddg = /uddg=([^&]+)/.exec(url);
+    if (uddg) url = decodeURIComponent(uddg[1]!);
+    if (!/^https?:/.test(url)) continue;
+    out.push({ url, title: strip(m[2]!), snip: strip(m[3]!) });
+  }
+  if (!out.length) return "";
+  const top = await readUrls(out.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
+  return out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
+}
