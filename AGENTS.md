@@ -8,3 +8,7 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Long-term memory lives per user in the `user_memories` table (via `src/lib/memory.server.ts`); Google Drive memory was removed — keep memory in the database.
+- `/api/chat` streams `data: {"stage": ...}` SSE events before model output so the UI can show progress steps; keep new tools (search, image) emitting stages.
+- Backup API key pool is capped at 2 and deduplicated on save; keys are only read server-side for AI calls.
