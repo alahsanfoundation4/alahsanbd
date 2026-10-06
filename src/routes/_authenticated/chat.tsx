@@ -336,6 +336,11 @@ function ChatPage() {
     }
     setLoading(false);
     if (full) {
+      // অসম্পূর্ণ কোড ব্লক বন্ধ করা, যাতে লাইভ লিংক কোডের ভেতরে না পড়ে
+      if (((full.match(/```/g) || []).length) % 2 === 1) {
+        full += "\n```";
+        setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
+      }
       const htmlCode = full.match(/```html\s*\n([\s\S]*?)(?:```|$)/i)?.[1];
       if (htmlCode && /<html/i.test(htmlCode)) {
         pushStage("build");
