@@ -8,7 +8,8 @@ export const Route = createFileRoute("/p/$id")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data } = await supabaseAdmin.from("pages").select("html").eq("id", params.id).maybeSingle();
         if (!data) return new Response("Not found", { status: 404 });
-        return new Response(data.html, {
+        const { withStorageShim } = await import("@/lib/page-shim");
+        return new Response(withStorageShim(data.html), {
           headers: {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "public, max-age=300",
