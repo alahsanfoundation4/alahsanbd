@@ -71,17 +71,18 @@ function AdminPage() {
 
   const save = async () => {
     setStatus("সংরক্ষণ হচ্ছে…");
-    const r1 = await supabase.from("ai_settings").update({
+    const r1 = await supabase.from("ai_settings").upsert({
       ...s,
+      id: 1,
       hourly_limit: Math.max(1, s.hourly_limit || 1),
       daily_limit: Math.max(1, s.daily_limit || 1),
       updated_at: new Date().toISOString(),
-    }).eq("id", 1);
+    }, { onConflict: "id" });
     const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
     const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
       .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
     setPool(cleanPool);
-    const r2 = await supabase.from("ai_keys").update({ google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }).eq("id", 1);
+    const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }, { onConflict: "id" });
     const err = r1.error || r2.error;
     setStatus(err ? `ত্রুটি: ${err.message}` : "✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
   };
