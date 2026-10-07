@@ -513,7 +513,7 @@ async function webSearch(q: string): Promise<string> {
     if (!/^https?:/.test(url)) continue;
     out.push({ url, title: strip(m[2]!), snip: strip(m[3]!) });
   }
-  if (!out.length) return "";
+  if (!out.length) return await news;
   const top = await readUrls(out.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
   const n = await news;
   return (n ? n + "\n\n" : "") + out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");

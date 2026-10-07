@@ -93,6 +93,8 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   async search(c) {
     const r = await fetch("https://html.duckduckgo.com/html/", { method: "POST", headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36", Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded" }, body: "q=bangladesh", signal: AbortSignal.timeout(8000) }).catch(() => null);
     if (r?.ok && /result__a/.test(await r.text())) return void c.passed.push("ওয়েব অনুসন্ধান");
+    const b = await fetch("https://www.bing.com/search?q=bangladesh", { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36" }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+    if (b?.ok && /b_algo/.test(await b.text())) return void c.passed.push("ওয়েব অনুসন্ধান (ব্যাকআপ উৎস)");
     c.issues.push({ id: "search", area: "ওয়েব অনুসন্ধান", title: "ওয়েব অনুসন্ধান সাড়া দিচ্ছে না", detail: `স্ট্যাটাস ${r?.status ?? "নেটওয়ার্ক"} — সাম্প্রতিক প্রশ্নে এআই সতর্কতা দিয়ে উত্তর দেবে`, });
   },
   async gateway(c) {
