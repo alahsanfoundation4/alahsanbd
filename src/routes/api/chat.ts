@@ -175,12 +175,21 @@ export const Route = createFileRoute("/api/chat")({
         }
         system += INTEGRITY;
 
-        // Per-user long-term memory (database)
+        // Current Bangladesh date/time so the AI always knows "today"
+        const now = new Date();
+        const bdDate = new Intl.DateTimeFormat("bn-BD", { timeZone: "Asia/Dhaka", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(now);
+        system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nএখন বাংলাদেশ সময়: ${bdDate} (ISO ${now.toISOString()})। তারিখ/সময় জিজ্ঞেস করলে এটাই বলবে; কখনো বলবে না যে তোমার ঘড়ি বা ইন্টারনেট নেই। তোমার সরাসরি ওয়েব অনুসন্ধান ও লিংক পড়ার ক্ষমতা আছে।`;
+
+        // Per-user long-term memory (database) + recent talk from other chats
         try {
           const mem = await import("@/lib/memory.server");
           const items = await mem.loadMemory(uid, 60);
           if (items.length)
-            system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (প্রাসঙ্গিক হলে ব্যবহার করবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
+            system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (সব চ্যাটে প্রযোজ্য, অবশ্যই মনে রাখবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { data: recent } = await supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15);
+          if (recent?.length)
+            system += `\n\n=== এই ব্যবহারকারীর আগের চ্যাটগুলোতে সাম্প্রতিক কথা (প্রসঙ্গ মনে রাখতে ব্যবহার করবে) ===\n${recent.reverse().map((r) => "- " + String(r.content).slice(0, 200).replace(/\s+/g, " ")).join("\n")}`;
         } catch (e) {
           console.error("memory load failed", e);
         }
@@ -434,13 +443,27 @@ function needsSearch(t: string): boolean {
   return /(সর্বশেষ|সাম্প্রতিক|আজকে?র?|এখন|বর্তমান|খবর|সংবাদ|দাম|মূল্য|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|২০২[৪-৯]|latest|today|current|news|price|weather|score|recent|202[4-9]|সার্চ|খুঁজে|search)/i.test(t);
 }
 
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+async function ddgHtml(q: string): Promise<string> {
+  for (let i = 0; i < 2; i++) {
+    const r = await fetch("https://html.duckduckgo.com/html/", {
+      method: "POST",
+      headers: { "User-Agent": BROWSER_UA, Accept: "text/html", "Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `q=${encodeURIComponent(q.slice(0, 200))}&kl=bd-en`,
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => null);
+    if (r?.ok) {
+      const h = await r.text();
+      if (/result__a/.test(h)) return h;
+    }
+    await new Promise((res) => setTimeout(res, 600));
+  }
+  return "";
+}
+
 async function webSearch(q: string): Promise<string> {
-  const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q.slice(0, 200))}`, {
-    headers: { "User-Agent": "Mozilla/5.0 (AlAhsanAI search)", Accept: "text/html" },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!r.ok) return "";
-  const html = await r.text();
+  const html = await ddgHtml(q);
+  if (!html) return "";
   const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
   const out: { url: string; title: string; snip: string }[] = [];
   const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
