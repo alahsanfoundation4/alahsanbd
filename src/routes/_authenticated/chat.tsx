@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass } from "lucide-react";
 
 const STAGE_LABEL: Record<string, string> = {
   think: "আপনার প্রশ্ন বিশ্লেষণ করা হচ্ছে...",
@@ -454,6 +454,9 @@ function ChatPage() {
           ))}
         </div>
         <div className="space-y-1 border-t border-border p-3 text-sm">
+          <Link to="/salat" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
+            <Compass size={16} /> নামাজের সময়, কিবলা ও মসজিদ
+          </Link>
           {admin && (
             <Link to="/admin" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
               <Shield size={16} /> অ্যাডমিন প্যানেল
@@ -510,14 +513,31 @@ function ChatPage() {
                   ) : (
                     <>
                       {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
-                      {m.content ? (
+                      {m.content ? (() => {
+                        const { body, followups } = splitFollowups(stripEmoji(m.content));
+                        const streamingNow = loading && i === msgs.length - 1;
+                        return (
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={loading && i === msgs.length - 1 ? mdStreaming : mdDone}>{stripEmoji(m.content)}</ReactMarkdown>
-                          <div className="mt-1 flex gap-3 text-muted-foreground">
-                            <button onClick={() => copy(m.content, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
-                            <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(m.content); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={streamingNow ? mdStreaming : mdDone}>{body}</ReactMarkdown>
+                          <div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
+                            <button onClick={() => copy(body, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
+                            <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
+                            {!streamingNow && <>
+                              <button onClick={() => exportAnswer(body, "pdf")} className="text-xs hover:text-primary">PDF</button>
+                              <button onClick={() => exportAnswer(body, "doc")} className="text-xs hover:text-primary">Word</button>
+                              <button onClick={() => exportAnswer(body, "md")} className="text-xs hover:text-primary">Markdown</button>
+                            </>}
                           </div>
+                          {!streamingNow && followups.length > 0 && i === msgs.length - 1 && (
+                            <div className="not-prose mt-3 flex flex-col gap-2">
+                              {followups.map((f) => (
+                                <button key={f} onClick={() => setInput(f)} className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-left text-sm hover:border-primary/70 hover:bg-primary/10">{f}</button>
+                              ))}
+                            </div>
+                          )}
                         </>
+                        );
+                      })()
                       ) : (
                         <span className="typing"><i /><i /><i /></span>
                       )}
