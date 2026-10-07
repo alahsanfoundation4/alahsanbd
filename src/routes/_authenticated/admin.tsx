@@ -88,7 +88,7 @@ function AdminPage() {
   };
 
   const card = "mt-6 rounded-2xl border border-border bg-card/80 p-6";
-  const input = "w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:border-primary";
+  const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 outline-none focus:border-primary";
   const h2 = "font-display text-xl text-primary";
   const hint = "mt-1 text-sm text-muted-foreground";
   const Toggle = ({ k, label }: { k: "url_reader" | "site_builder" | "chat_enabled"; label: string }) => (
@@ -99,14 +99,14 @@ function AdminPage() {
   );
 
   return (
-    <div className="pattern-bg min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl px-4 py-8 pb-28">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div className="pattern-bg min-h-screen w-full overflow-x-hidden bg-background text-foreground">
+      <div className="mx-auto w-full max-w-3xl px-3 py-8 pb-28 sm:px-4">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
             <Logo size={40} />
-            <div>
+            <div className="min-w-0">
               <h1 className="font-display text-3xl">সেটিংস</h1>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <p className="truncate text-sm text-muted-foreground">{user.email}</p>
             </div>
           </div>
           <Link to="/chat" className="flex items-center gap-1 text-primary"><ArrowLeft size={16} /> চ্যাট</Link>
@@ -258,7 +258,7 @@ function DriveMemory() {
 type PoolKey = { name: string; provider: "google" | "openai" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
-  const input = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
   const upd = (i: number, patch: Partial<PoolKey>) => setPool(pool.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
@@ -269,7 +269,7 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
       <div className="mt-4 space-y-3">
         {pool.map((p, i) => (
           <div key={i} className="space-y-2 rounded-xl border border-border p-3">
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <input value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="নাম (যেমন: Google কী ২)" className={input} />
               <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
                 <option value="google">Google</option>
