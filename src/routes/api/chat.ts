@@ -175,12 +175,21 @@ export const Route = createFileRoute("/api/chat")({
         }
         system += INTEGRITY;
 
-        // Per-user long-term memory (database)
+        // Current Bangladesh date/time so the AI always knows "today"
+        const now = new Date();
+        const bdDate = new Intl.DateTimeFormat("bn-BD", { timeZone: "Asia/Dhaka", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(now);
+        system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nএখন বাংলাদেশ সময়: ${bdDate} (ISO ${now.toISOString()})। তারিখ/সময় জিজ্ঞেস করলে এটাই বলবে; কখনো বলবে না যে তোমার ঘড়ি বা ইন্টারনেট নেই। তোমার সরাসরি ওয়েব অনুসন্ধান ও লিংক পড়ার ক্ষমতা আছে।`;
+
+        // Per-user long-term memory (database) + recent talk from other chats
         try {
           const mem = await import("@/lib/memory.server");
           const items = await mem.loadMemory(uid, 60);
           if (items.length)
-            system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (প্রাসঙ্গিক হলে ব্যবহার করবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
+            system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (সব চ্যাটে প্রযোজ্য, অবশ্যই মনে রাখবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { data: recent } = await supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15);
+          if (recent?.length)
+            system += `\n\n=== এই ব্যবহারকারীর আগের চ্যাটগুলোতে সাম্প্রতিক কথা (প্রসঙ্গ মনে রাখতে ব্যবহার করবে) ===\n${recent.reverse().map((r) => "- " + String(r.content).slice(0, 200).replace(/\s+/g, " ")).join("\n")}`;
         } catch (e) {
           console.error("memory load failed", e);
         }
@@ -261,14 +270,18 @@ export const Route = createFileRoute("/api/chat")({
           console.error(`Key "${a.label}" failed [${res.status}]: ${t.slice(0, 300)}`);
         }
 
-        if ((!res.ok || !res.body) && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
-          const gwModel = `${provider}/${model}`.replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, model: gwModel }),
-          }).catch(() => null);
-          if (g?.ok && g.body) res = g;
+        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
+          const first = `${provider}/${model}`.replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
+          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
+          for (const gwModel of chain) {
+            const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ ...body, model: gwModel }),
+            }).catch(() => null);
+            if (g?.ok && g.body) { res = g; break; }
+            await g?.text().catch(() => "");
+          }
         }
 
         if (!res.ok || !res.body) {
@@ -434,13 +447,61 @@ function needsSearch(t: string): boolean {
   return /(সর্বশেষ|সাম্প্রতিক|আজকে?র?|এখন|বর্তমান|খবর|সংবাদ|দাম|মূল্য|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|২০২[৪-৯]|latest|today|current|news|price|weather|score|recent|202[4-9]|সার্চ|খুঁজে|search)/i.test(t);
 }
 
-async function webSearch(q: string): Promise<string> {
-  const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q.slice(0, 200))}`, {
-    headers: { "User-Agent": "Mozilla/5.0 (AlAhsanAI search)", Accept: "text/html" },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!r.ok) return "";
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+async function ddgHtml(q: string): Promise<string> {
+  for (let i = 0; i < 2; i++) {
+    const r = await fetch("https://html.duckduckgo.com/html/", {
+      method: "POST",
+      headers: { "User-Agent": BROWSER_UA, Accept: "text/html", "Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `q=${encodeURIComponent(q.slice(0, 200))}&kl=bd-en`,
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => null);
+    if (r?.ok) {
+      const h = await r.text();
+      if (/result__a/.test(h)) return h;
+    }
+    await new Promise((res) => setTimeout(res, 600));
+  }
+  return "";
+}
+
+async function bingSearch(q: string): Promise<{ url: string; title: string; snip: string }[]> {
+  const r = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(q.slice(0, 200))}&cc=BD`, { headers: { "User-Agent": BROWSER_UA, Accept: "text/html", "Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8" }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r?.ok) return [];
   const html = await r.text();
+  const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&nbsp;|&ensp;/g, " ").replace(/\s+/g, " ").trim();
+  const out: { url: string; title: string; snip: string }[] = [];
+  for (const block of html.split('<li class="b_algo"').slice(1)) {
+    const a = /<h2[^>]*>\s*<a[^>]+href="(https?:[^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+    if (!a) continue;
+    const p = /<p[^>]*>([\s\S]*?)<\/p>/.exec(block);
+    out.push({ url: a[1]!.replace(/&amp;/g, "&"), title: strip(a[2]!), snip: p ? strip(p[1]!) : "" });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+async function newsRss(q: string): Promise<string> {
+  const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q.slice(0, 150))}&hl=bn&gl=BD&ceid=BD:bn`, { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r?.ok) return "";
+  const xml = await r.text();
+  const items = xml.split("<item>").slice(1, 9).map((it) => {
+    const g = (t: string) => (new RegExp(`<${t}>([\\s\\S]*?)</${t}>`).exec(it)?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
+    return `- ${g("title")} (${g("pubDate")})\n  ${g("link")}`;
+  });
+  return items.length ? `=== সর্বশেষ সংবাদ শিরোনাম (Google News) ===\n${items.join("\n")}` : "";
+}
+
+async function webSearch(q: string): Promise<string> {
+  const news = /(খবর|সংবাদ|news|আজকে?র?|today|সর্বশেষ|latest)/i.test(q) ? newsRss(q.replace(/(আজকের|আজকে|কী|কি|\?)/g, " ").trim() || "বাংলাদেশ") : Promise.resolve("");
+  const html = await ddgHtml(q);
+  if (!html) {
+    const b = await bingSearch(q);
+    const n = await news;
+    if (!b.length) return n;
+    const top = await readUrls(b.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
+    return [n, b.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n"), top ? `--- শীর্ষ পেজের লেখা ---\n${top}` : ""].filter(Boolean).join("\n\n");
+  }
   const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
   const out: { url: string; title: string; snip: string }[] = [];
   const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
@@ -452,7 +513,8 @@ async function webSearch(q: string): Promise<string> {
     if (!/^https?:/.test(url)) continue;
     out.push({ url, title: strip(m[2]!), snip: strip(m[3]!) });
   }
-  if (!out.length) return "";
+  if (!out.length) return await news;
   const top = await readUrls(out.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
-  return out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
+  const n = await news;
+  return (n ? n + "\n\n" : "") + out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
 }
