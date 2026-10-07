@@ -465,9 +465,43 @@ async function ddgHtml(q: string): Promise<string> {
   return "";
 }
 
+async function bingSearch(q: string): Promise<{ url: string; title: string; snip: string }[]> {
+  const r = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(q.slice(0, 200))}&cc=BD`, { headers: { "User-Agent": BROWSER_UA, Accept: "text/html", "Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8" }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r?.ok) return [];
+  const html = await r.text();
+  const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&nbsp;|&ensp;/g, " ").replace(/\s+/g, " ").trim();
+  const out: { url: string; title: string; snip: string }[] = [];
+  for (const block of html.split('<li class="b_algo"').slice(1)) {
+    const a = /<h2[^>]*>\s*<a[^>]+href="(https?:[^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+    if (!a) continue;
+    const p = /<p[^>]*>([\s\S]*?)<\/p>/.exec(block);
+    out.push({ url: a[1]!.replace(/&amp;/g, "&"), title: strip(a[2]!), snip: p ? strip(p[1]!) : "" });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+async function newsRss(q: string): Promise<string> {
+  const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q.slice(0, 150))}&hl=bn&gl=BD&ceid=BD:bn`, { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r?.ok) return "";
+  const xml = await r.text();
+  const items = xml.split("<item>").slice(1, 9).map((it) => {
+    const g = (t: string) => (new RegExp(`<${t}>([\\s\\S]*?)</${t}>`).exec(it)?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
+    return `- ${g("title")} (${g("pubDate")})\n  ${g("link")}`;
+  });
+  return items.length ? `=== সর্বশেষ সংবাদ শিরোনাম (Google News) ===\n${items.join("\n")}` : "";
+}
+
 async function webSearch(q: string): Promise<string> {
+  const news = /(খবর|সংবাদ|news|আজকে?র?|today|সর্বশেষ|latest)/i.test(q) ? newsRss(q.replace(/(আজকের|আজকে|কী|কি|\?)/g, " ").trim() || "বাংলাদেশ") : Promise.resolve("");
   const html = await ddgHtml(q);
-  if (!html) return "";
+  if (!html) {
+    const b = await bingSearch(q);
+    const n = await news;
+    if (!b.length) return n;
+    const top = await readUrls(b.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
+    return [n, b.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n"), top ? `--- শীর্ষ পেজের লেখা ---\n${top}` : ""].filter(Boolean).join("\n\n");
+  }
   const strip = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
   const out: { url: string; title: string; snip: string }[] = [];
   const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
@@ -481,5 +515,6 @@ async function webSearch(q: string): Promise<string> {
   }
   if (!out.length) return "";
   const top = await readUrls(out.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
-  return out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
+  const n = await news;
+  return (n ? n + "\n\n" : "") + out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
 }
