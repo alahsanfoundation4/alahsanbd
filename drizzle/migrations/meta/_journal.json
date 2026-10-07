@@ -1,41 +1,5 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1791272141350,
-      "tag": "0000_init_alahsan_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1791272167600,
-      "tag": "0001_ai_settings_extra_columns",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1791272202285,
-      "tag": "0002_ai_settings_limits",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1791272250648,
-      "tag": "0003_claim_founder_admin_fn",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1791273067596,
-      "tag": "0004_user_memories",
-      "breakpoints": true
-    }
-  ]
+  "entries": []
 }
