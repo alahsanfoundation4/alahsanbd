@@ -4,23 +4,63 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass } from "lucide-react";
 
-const STAGE_LABEL: Record<string, string> = { think: "চিন্তা করছে", search: "ওয়েবে অনুসন্ধান", image: "ছবি তৈরি", code: "কোড তৈরি", write: "উত্তর লিখছে", build: "ওয়েবসাইট তৈরি ও লাইভ", test: "যাচাই", done: "সম্পন্ন" };
+const STAGE_LABEL: Record<string, string> = {
+  think: "আপনার প্রশ্ন বিশ্লেষণ করা হচ্ছে...",
+  search: "অনলাইনে তথ্য অনুসন্ধান করা হচ্ছে...",
+  verify: "উৎস ও প্রামাণ্য দলীলসমূহ যাচাই করা হচ্ছে...",
+  image: "ছবি প্রস্তুত করা হচ্ছে...",
+  code: "সফটওয়্যারের কোড ও আর্কিটেকচার প্রস্তুত করা হচ্ছে...",
+  write: "উত্তর প্রস্তুত করা হচ্ছে...",
+  build: "ওয়েবসাইট লাইভ করা হচ্ছে...",
+  test: "লাইভ লিংক যাচাই করা হচ্ছে...",
+  done: "সম্পন্ন হয়েছে",
+};
 function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
+  const cur = stages[Math.min(current, stages.length - 1)] ?? "think";
+  const finished = current >= stages.length;
   return (
-    <div className="not-prose mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-wide animate-in fade-in">
-      {stages.map((s, i) => (
-        <span key={s + i} className="flex items-center gap-2">
-          <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 transition-all duration-500 ${i < current ? "text-primary" : i === current ? "bg-primary/10 text-foreground" : "text-muted-foreground/50"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${i < current ? "bg-primary" : i === current ? "animate-ping bg-primary" : "bg-muted-foreground/30"}`} />
-            {STAGE_LABEL[s] ?? s}
-          </span>
-          {i < stages.length - 1 && <span className={`h-px w-4 transition-colors duration-500 ${i < current ? "bg-primary/60" : "bg-border"}`} />}
+    <div className="not-prose mb-3 animate-in fade-in">
+      <div className="flex items-center gap-2.5 text-sm">
+        <span className="relative flex h-2.5 w-2.5">
+          {!finished && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />}
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
         </span>
-      ))}
+        <span className={finished ? "text-primary" : "live-status font-medium"}>{finished ? STAGE_LABEL["done"] : STAGE_LABEL[cur] ?? cur}</span>
+      </div>
+      <div className="mt-1.5 ml-5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70">
+        {stages.slice(0, finished ? stages.length : current).map((s, i) => (
+          <span key={s + i}>{(STAGE_LABEL[s] ?? s).replace(/ করা হচ্ছে\.\.\.$/, " সম্পন্ন").replace(/\.\.\.$/, "")}</span>
+        ))}
+      </div>
     </div>
   );
+}
+
+// উত্তরের শেষে [[প্রশ্ন: ...]] আকারে ফলো-আপ প্রশ্ন থাকে — আলাদা করা
+function splitFollowups(t: string): { body: string; followups: string[] } {
+  const followups: string[] = [];
+  const body = t.replace(/\[\[প্রশ্ন:\s*([^\]]+)\]\]/g, (_m, q) => { followups.push(String(q).trim()); return ""; }).replace(/\n+\s*(পরবর্তী প্রশ্ন|ফলো-আপ)[^\n]*\s*$/m, "").trimEnd();
+  return { body, followups: followups.slice(0, 3) };
+}
+
+function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  if (kind === "pdf") {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>আল আহসান এআই</title><style>body{font-family:'Hind Siliguri',sans-serif;max-width:780px;margin:24px auto;padding:0 16px;line-height:1.8;white-space:pre-wrap}</style></head><body><h2>আল আহসান এআই</h2>${esc(content)}<script>setTimeout(()=>print(),300)<\/script></body></html>`);
+    w.document.close();
+    return;
+  }
+  const blob = kind === "md"
+    ? new Blob([content], { type: "text/markdown;charset=utf-8" })
+    : new Blob([`<html><head><meta charset="utf-8"></head><body style="font-family:'Hind Siliguri',sans-serif;line-height:1.8;white-space:pre-wrap">${esc(content)}</body></html>`], { type: "application/msword" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `al-ahsan-answer.${kind}`;
+  a.click();
 }
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
@@ -414,6 +454,9 @@ function ChatPage() {
           ))}
         </div>
         <div className="space-y-1 border-t border-border p-3 text-sm">
+          <Link to="/salat" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
+            <Compass size={16} /> নামাজের সময়, কিবলা ও মসজিদ
+          </Link>
           {admin && (
             <Link to="/admin" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
               <Shield size={16} /> অ্যাডমিন প্যানেল
@@ -470,15 +513,31 @@ function ChatPage() {
                   ) : (
                     <>
                       {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
-                      {m.content ? (
+                      {m.content ? (() => {
+                        const { body, followups } = splitFollowups(stripEmoji(m.content));
+                        const streamingNow = loading && i === msgs.length - 1;
+                        return (
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={loading && i === msgs.length - 1 ? mdStreaming : mdDone}>{stripEmoji(m.content)}</ReactMarkdown>
-                          <div className="mt-1 flex gap-3 text-muted-foreground">
-                            <button onClick={() => copy(m.content, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
-                            <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(m.content); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={streamingNow ? mdStreaming : mdDone}>{body}</ReactMarkdown>
+                          <div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
+                            <button onClick={() => copy(body, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
+                            <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
+                            {!streamingNow && <>
+                              <button onClick={() => exportAnswer(body, "pdf")} className="text-xs hover:text-primary">PDF</button>
+                              <button onClick={() => exportAnswer(body, "doc")} className="text-xs hover:text-primary">Word</button>
+                              <button onClick={() => exportAnswer(body, "md")} className="text-xs hover:text-primary">Markdown</button>
+                            </>}
                           </div>
+                          {!streamingNow && followups.length > 0 && i === msgs.length - 1 && (
+                            <div className="not-prose mt-3 flex flex-col gap-2">
+                              {followups.map((f) => (
+                                <button key={f} onClick={() => setInput(f)} className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-left text-sm hover:border-primary/70 hover:bg-primary/10">{f}</button>
+                              ))}
+                            </div>
+                          )}
                         </>
-                      ) : (
+                        );
+                      })() : (
                         <span className="typing"><i /><i /><i /></span>
                       )}
                     </>
