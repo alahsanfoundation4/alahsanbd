@@ -6,21 +6,61 @@ const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransfo
 import remarkGfm from "remark-gfm";
 import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus } from "lucide-react";
 
-const STAGE_LABEL: Record<string, string> = { think: "চিন্তা করছে", search: "ওয়েবে অনুসন্ধান", image: "ছবি তৈরি", code: "কোড তৈরি", write: "উত্তর লিখছে", build: "ওয়েবসাইট তৈরি ও লাইভ", test: "যাচাই", done: "সম্পন্ন" };
+const STAGE_LABEL: Record<string, string> = {
+  think: "আপনার প্রশ্ন বিশ্লেষণ করা হচ্ছে...",
+  search: "অনলাইনে তথ্য অনুসন্ধান করা হচ্ছে...",
+  verify: "উৎস ও প্রামাণ্য দলীলসমূহ যাচাই করা হচ্ছে...",
+  image: "ছবি প্রস্তুত করা হচ্ছে...",
+  code: "সফটওয়্যারের কোড ও আর্কিটেকচার প্রস্তুত করা হচ্ছে...",
+  write: "উত্তর প্রস্তুত করা হচ্ছে...",
+  build: "ওয়েবসাইট লাইভ করা হচ্ছে...",
+  test: "লাইভ লিংক যাচাই করা হচ্ছে...",
+  done: "সম্পন্ন হয়েছে",
+};
 function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
+  const cur = stages[Math.min(current, stages.length - 1)] ?? "think";
+  const finished = current >= stages.length;
   return (
-    <div className="not-prose mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-wide animate-in fade-in">
-      {stages.map((s, i) => (
-        <span key={s + i} className="flex items-center gap-2">
-          <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 transition-all duration-500 ${i < current ? "text-primary" : i === current ? "bg-primary/10 text-foreground" : "text-muted-foreground/50"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${i < current ? "bg-primary" : i === current ? "animate-ping bg-primary" : "bg-muted-foreground/30"}`} />
-            {STAGE_LABEL[s] ?? s}
-          </span>
-          {i < stages.length - 1 && <span className={`h-px w-4 transition-colors duration-500 ${i < current ? "bg-primary/60" : "bg-border"}`} />}
+    <div className="not-prose mb-3 animate-in fade-in">
+      <div className="flex items-center gap-2.5 text-sm">
+        <span className="relative flex h-2.5 w-2.5">
+          {!finished && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />}
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
         </span>
-      ))}
+        <span className={finished ? "text-primary" : "live-status font-medium"}>{finished ? STAGE_LABEL.done : STAGE_LABEL[cur] ?? cur}</span>
+      </div>
+      <div className="mt-1.5 ml-5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70">
+        {stages.slice(0, finished ? stages.length : current).map((s, i) => (
+          <span key={s + i}>{(STAGE_LABEL[s] ?? s).replace(/ করা হচ্ছে\.\.\.$/, " সম্পন্ন").replace(/\.\.\.$/, "")}</span>
+        ))}
+      </div>
     </div>
   );
+}
+
+// উত্তরের শেষে [[প্রশ্ন: ...]] আকারে ফলো-আপ প্রশ্ন থাকে — আলাদা করা
+function splitFollowups(t: string): { body: string; followups: string[] } {
+  const followups: string[] = [];
+  const body = t.replace(/\[\[প্রশ্ন:\s*([^\]]+)\]\]/g, (_m, q) => { followups.push(String(q).trim()); return ""; }).replace(/\n+\s*(পরবর্তী প্রশ্ন|ফলো-আপ)[^\n]*\s*$/m, "").trimEnd();
+  return { body, followups: followups.slice(0, 3) };
+}
+
+function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  if (kind === "pdf") {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>আল আহসান এআই</title><style>body{font-family:'Hind Siliguri',sans-serif;max-width:780px;margin:24px auto;padding:0 16px;line-height:1.8;white-space:pre-wrap}</style></head><body><h2>আল আহসান এআই</h2>${esc(content)}<script>setTimeout(()=>print(),300)<\/script></body></html>`);
+    w.document.close();
+    return;
+  }
+  const blob = kind === "md"
+    ? new Blob([content], { type: "text/markdown;charset=utf-8" })
+    : new Blob([`<html><head><meta charset="utf-8"></head><body style="font-family:'Hind Siliguri',sans-serif;line-height:1.8;white-space:pre-wrap">${esc(content)}</body></html>`], { type: "application/msword" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `al-ahsan-answer.${kind}`;
+  a.click();
 }
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
