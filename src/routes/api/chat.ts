@@ -306,6 +306,7 @@ export const Route = createFileRoute("/api/chat")({
           return new Response(friendlyError(err.status, err.text), { status: err.status || 500 });
         }
 
+        if (realErr) stages.push("fallback");
         stages.push("write");
         return withStages(stages, res.body);
       },
