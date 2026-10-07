@@ -270,14 +270,18 @@ export const Route = createFileRoute("/api/chat")({
           console.error(`Key "${a.label}" failed [${res.status}]: ${t.slice(0, 300)}`);
         }
 
-        if ((!res.ok || !res.body) && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
-          const gwModel = `${provider}/${model}`.replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, model: gwModel }),
-          }).catch(() => null);
-          if (g?.ok && g.body) res = g;
+        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
+          const first = `${provider}/${model}`.replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
+          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
+          for (const gwModel of chain) {
+            const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ ...body, model: gwModel }),
+            }).catch(() => null);
+            if (g?.ok && g.body) { res = g; break; }
+            await g?.text().catch(() => "");
+          }
         }
 
         if (!res.ok || !res.body) {
