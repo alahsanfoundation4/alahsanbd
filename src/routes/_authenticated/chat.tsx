@@ -342,7 +342,9 @@ function ChatPage() {
     const img = image;
     const d = doc;
     const typed = input.trim() || (img ? "এই ছবিটি বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
-    const text = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    // Show/store only a short label; the full file text goes to the AI for this message only
+    const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
+    const apiText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
     if (!typed || loading || docBusy) return;
     setInput("");
     setImage(null);
@@ -367,7 +369,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const content = m.content.replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return i === arr.length - 1 ? { ...m, content } : { role: m.role, content }; }) }),
+        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const last = i === arr.length - 1; const content = (last ? apiText : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return last ? { ...m, content } : { role: m.role, content }; }) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
@@ -459,7 +461,7 @@ function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground">
       <aside
         className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 flex-col border-r border-border bg-sidebar md:static md:flex`}
       >
@@ -512,10 +514,10 @@ function ChatPage() {
       </aside>
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
-      <main className="pattern-bg flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <main className="pattern-bg flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        <header className="flex min-w-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
-          <span className="font-display text-lg text-primary">আল আহসান এআই</span>
+          <span className="truncate font-display text-lg text-primary">আল আহসান এআই</span>
           <div className="flex items-center gap-2">
           {msgs.length > 0 && (<>
             <button onClick={() => printChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="প্রিন্ট / PDF" title="প্রিন্ট / PDF"><Printer size={16} /></button>
@@ -530,8 +532,8 @@ function ChatPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="mx-auto w-full max-w-3xl px-3 py-6 sm:px-4">
             {msgs.length === 0 && (
               <div className="mt-20 flex flex-col items-center text-center">
                 <Logo size={64} />
@@ -546,7 +548,7 @@ function ChatPage() {
             )}
             {msgs.map((m, i) => (
               <div key={i} className={`mb-5 flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={m.role === "user" ? "max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai max-w-full flex-1"}>
+                <div className={m.role === "user" ? "max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai min-w-0 max-w-full flex-1 break-words"}>
                   {m.role === "user" ? (
                     <>
                       {m.image && <img src={m.image} alt="পাঠানো ছবি" className="mb-2 max-h-64 rounded-lg" />}
@@ -593,7 +595,7 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-border/60 p-4">
+        <div className="border-t border-border/60 p-2 sm:p-4">
           {(doc || docBusy || image) && (
             <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground">
               {image && <span className="rounded-md border border-border px-2 py-1">ছবি সংযুক্ত <button onClick={() => setImage(null)} className="ml-1 text-destructive">x</button></span>}
@@ -601,12 +603,12 @@ function ChatPage() {
               {doc && <span className="rounded-md border border-border px-2 py-1">{doc.name} ({doc.text.length} অক্ষর) <button onClick={() => setDoc(null)} className="ml-1 text-destructive">x</button></span>}
             </div>
           )}
-          <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border bg-card p-2 focus-within:border-primary/60">
+          <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-card p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImage(f); e.target.value = ""; }} />
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
-            <button onClick={() => fileRef.current?.click()} className="rounded-xl p-3 text-primary hover:bg-primary/10" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন"><ImagePlus size={20} /></button>
-            <button onClick={() => docRef.current?.click()} className="rounded-xl p-3 text-primary hover:bg-primary/10" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
-            <button onClick={toggleMic} className={`rounded-xl p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
+            <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন"><ImagePlus size={20} /></button>
+            <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
+            <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
               {listening ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
             <textarea
@@ -615,12 +617,12 @@ function ChatPage() {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               rows={1}
               placeholder={listening ? "শুনছি…" : "আপনার প্রশ্ন লিখুন…"}
-              className="max-h-48 flex-1 resize-none bg-transparent px-2 py-3 outline-none placeholder:text-muted-foreground"
+              className="max-h-48 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 outline-none placeholder:text-muted-foreground"
             />
             {loading ? (
-              <button onClick={() => abortRef.current?.abort()} className="rounded-xl bg-secondary p-3" aria-label="থামান"><Square size={20} /></button>
+              <button onClick={() => abortRef.current?.abort()} className="shrink-0 rounded-xl bg-secondary p-2 sm:p-3" aria-label="থামান"><Square size={20} /></button>
             ) : (
-              <button onClick={send} disabled={!input.trim() && !image} className="rounded-xl bg-primary p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
+              <button onClick={send} disabled={(!input.trim() && !image && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
             )}
           </div>
         </div>
