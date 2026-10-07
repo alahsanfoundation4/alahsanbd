@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2 } from "lucide-react";
+import { extractDocText, loadBookmarks, saveBookmarks, downloadShareCard, type Bookmark } from "@/lib/extras";
+import { ChartBlock } from "@/components/ChartBlock";
 
 const STAGE_LABEL: Record<string, string> = {
   think: "আপনার প্রশ্ন বিশ্লেষণ করা হচ্ছে...",
@@ -136,6 +138,7 @@ const makeMd = (streaming: boolean) => ({
   code({ className, children, ...rest }: any) {
     const text = String(children ?? "");
     if (/language-html/.test(className || "") && /<(html|body|!doctype)/i.test(text)) return <HtmlPreview code={text} streaming={streaming} />;
+    if (/language-chart/.test(className || "") && !streaming) return <ChartBlock json={text} />;
     return <code className={className} {...rest}>{children}</code>;
   },
   a({ href, children }: any) {
@@ -246,6 +249,28 @@ function ChatPage() {
     };
     reader.readAsDataURL(file);
   };
+  const docRef = useRef<HTMLInputElement>(null);
+  const [doc, setDoc] = useState<{ name: string; text: string } | null>(null);
+  const [docBusy, setDocBusy] = useState(false);
+  const pickDoc = async (file: File) => {
+    if (file.size > 20_000_000) return alert("ফাইলটি ২০ MB-এর বেশি বড়।");
+    setDocBusy(true);
+    try {
+      const t = (await extractDocText(file)).trim();
+      if (!t) alert("ফাইলে পড়ার মতো লেখা পাওয়া যায়নি। স্ক্যান করা পাতা হলে ছবি হিসেবে পাঠান।");
+      else setDoc({ name: file.name, text: t });
+    } catch (e: any) { alert(e?.message || "ফাইলটি পড়া যায়নি।"); }
+    setDocBusy(false);
+  };
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  useEffect(() => { setBookmarks(loadBookmarks()); }, []);
+  const toggleBookmark = (content: string) => {
+    setBookmarks((prev) => {
+      const next = prev.some((b) => b.content === content) ? prev.filter((b) => b.content !== content) : [{ id: crypto.randomUUID(), content, at: Date.now() }, ...prev];
+      saveBookmarks(next);
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(false);
   const [flow, setFlow] = useState<{ stages: string[]; current: number } | null>(null);
   const pushStage = (st: string, finish = false) => setFlow((f) => { const stages = f ? (f.stages.includes(st) ? f.stages : [...f.stages, st]) : [st]; return { stages, current: finish ? stages.length : stages.indexOf(st) }; });
@@ -315,10 +340,13 @@ function ChatPage() {
 
   const send = async () => {
     const img = image;
-    const text = input.trim() || (img ? "এই ছবিটি বিশ্লেষণ করুন।" : "");
-    if (!text || loading) return;
+    const d = doc;
+    const typed = input.trim() || (img ? "এই ছবিটি বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
+    const text = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    if (!typed || loading || docBusy) return;
     setInput("");
     setImage(null);
+    setDoc(null);
     let convId = active;
     if (!convId) {
       const { data, error } = await supabase.from("conversations").insert({ title: text.slice(0, 60), user_id: user.id }).select("id").single();
@@ -456,6 +484,17 @@ function ChatPage() {
             </div>
           ))}
         </div>
+        {bookmarks.length > 0 && (
+          <div className="max-h-48 overflow-y-auto border-t border-border px-2 py-2 text-sm">
+            <div className="px-2 pb-1 text-xs text-muted-foreground">সংরক্ষিত উত্তর ({bookmarks.length})</div>
+            {bookmarks.map((b) => (
+              <div key={b.id} className="group flex items-center rounded-lg px-2 py-1.5 hover:bg-sidebar-accent/60">
+                <button onClick={() => { setActive(null); setMsgs([{ role: "assistant", content: b.content }]); setSidebar(false); }} className="flex-1 truncate text-left">{b.content.replace(/[#*`>]/g, "").slice(0, 60)}</button>
+                <button onClick={() => toggleBookmark(b.content)} className="text-muted-foreground hover:text-destructive" aria-label="মুছুন"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="space-y-1 border-t border-border p-3 text-sm">
           <Link to="/salat" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
             <Compass size={16} /> নামাজের সময়, কিবলা ও মসজিদ
@@ -529,6 +568,8 @@ function ChatPage() {
                               <button onClick={() => exportAnswer(body, "pdf")} className="text-xs hover:text-primary">PDF</button>
                               <button onClick={() => exportAnswer(body, "doc")} className="text-xs hover:text-primary">Word</button>
                               <button onClick={() => exportAnswer(body, "md")} className="text-xs hover:text-primary">Markdown</button>
+                              <button onClick={() => toggleBookmark(body)} className="flex items-center gap-1 text-xs hover:text-primary">{bookmarks.some((b) => b.content === body) ? <><BookmarkCheck size={14} /> সংরক্ষিত</> : <><BookmarkIcon size={14} /> সংরক্ষণ</>}</button>
+                              <button onClick={() => downloadShareCard(body)} className="flex items-center gap-1 text-xs hover:text-primary"><Share2 size={14} /> শেয়ার কার্ড</button>
                             </>}
                           </div>
                           {!streamingNow && followups.length > 0 && i === msgs.length - 1 && (
@@ -553,9 +594,18 @@ function ChatPage() {
         </div>
 
         <div className="border-t border-border/60 p-4">
+          {(doc || docBusy || image) && (
+            <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground">
+              {image && <span className="rounded-md border border-border px-2 py-1">ছবি সংযুক্ত <button onClick={() => setImage(null)} className="ml-1 text-destructive">x</button></span>}
+              {docBusy && <span>ফাইল পড়া হচ্ছে...</span>}
+              {doc && <span className="rounded-md border border-border px-2 py-1">{doc.name} ({doc.text.length} অক্ষর) <button onClick={() => setDoc(null)} className="ml-1 text-destructive">x</button></span>}
+            </div>
+          )}
           <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border bg-card p-2 focus-within:border-primary/60">
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImage(f); e.target.value = ""; }} />
+            <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
             <button onClick={() => fileRef.current?.click()} className="rounded-xl p-3 text-primary hover:bg-primary/10" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন"><ImagePlus size={20} /></button>
+            <button onClick={() => docRef.current?.click()} className="rounded-xl p-3 text-primary hover:bg-primary/10" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
             <button onClick={toggleMic} className={`rounded-xl p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
               {listening ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
