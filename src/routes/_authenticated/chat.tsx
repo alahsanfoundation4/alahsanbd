@@ -342,7 +342,9 @@ function ChatPage() {
     const img = image;
     const d = doc;
     const typed = input.trim() || (img ? "এই ছবিটি বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
-    const text = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    // Show/store only a short label; the full file text goes to the AI for this message only
+    const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
+    const apiText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
     if (!typed || loading || docBusy) return;
     setInput("");
     setImage(null);
@@ -367,7 +369,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const content = m.content.replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return i === arr.length - 1 ? { ...m, content } : { role: m.role, content }; }) }),
+        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const last = i === arr.length - 1; const content = (last ? apiText : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return last ? { ...m, content } : { role: m.role, content }; }) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
