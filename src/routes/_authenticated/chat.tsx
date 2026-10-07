@@ -27,7 +27,7 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
           {!finished && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />}
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
         </span>
-        <span className={finished ? "text-primary" : "live-status font-medium"}>{finished ? STAGE_LABEL.done : STAGE_LABEL[cur] ?? cur}</span>
+        <span className={finished ? "text-primary" : "live-status font-medium"}>{finished ? STAGE_LABEL["done"] : STAGE_LABEL[cur] ?? cur}</span>
       </div>
       <div className="mt-1.5 ml-5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70">
         {stages.slice(0, finished ? stages.length : current).map((s, i) => (
@@ -537,8 +537,7 @@ function ChatPage() {
                           )}
                         </>
                         );
-                      })()
-                      ) : (
+                      })() : (
                         <span className="typing"><i /><i /><i /></span>
                       )}
                     </>
