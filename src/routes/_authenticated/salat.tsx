@@ -81,7 +81,7 @@ function SalatPage() {
   }, []);
 
   const locate = () => {
-    if (!navigator.geolocation) return loadFor(DHAKA, DHAKA_NOTE);
+    if (!navigator.geolocation) { void loadFor(DHAKA, DHAKA_NOTE); return; }
     setStatus("আপনার ভৌগোলিক অবস্থান শনাক্ত করা হচ্ছে...");
     navigator.geolocation.getCurrentPosition(
       (g) => loadFor({ lat: g.coords.latitude, lng: g.coords.longitude }),
