@@ -53,33 +53,39 @@ function SalatPage() {
   const [status, setStatus] = useState("");
   const [heading, setHeading] = useState<number | null>(null);
 
+  const DHAKA: Pos = { lat: 23.8103, lng: 90.4125 };
+
+  const loadFor = async (p: Pos, note = "") => {
+    setPos(p);
+    setStatus("নামাজের সময়সূচি সংগ্রহ করা হচ্ছে...");
+    try {
+      const r = await fetch(`https://api.aladhan.com/v1/timings?latitude=${p.lat}&longitude=${p.lng}&method=1&school=1`);
+      const j = await r.json();
+      const t = j?.data?.timings as Timings | undefined;
+      if (!t) throw new Error();
+      setTimes(t);
+      if (!note) localStorage.setItem(CACHE, JSON.stringify({ pos: p, times: t, at: Date.now() }));
+      setStatus(note);
+    } catch { setStatus("নামাজের সময় আনা যায়নি। ইন্টারনেট সংযোগ যাচাই করে আবার চেষ্টা করুন।"); }
+    findMosques(p);
+  };
+  const DHAKA_NOTE = "অবস্থান পাওয়া যায়নি, তাই ঢাকা, বাংলাদেশের সময় ও কিবলা দেখানো হচ্ছে।";
+
   useEffect(() => {
     try {
       const c = JSON.parse(localStorage.getItem(CACHE) || "null");
-      if (c?.pos) { setPos(c.pos); setTimes(c.times); setStatus("সংরক্ষিত সময়সূচি দেখানো হচ্ছে (অফলাইনেও কাজ করবে)।"); }
+      if (c?.pos) { setPos(c.pos); setTimes(c.times); setStatus("সংরক্ষিত সময়সূচি দেখানো হচ্ছে (অফলাইনেও কাজ করবে)।"); return; }
     } catch { /* ignore */ }
+    loadFor(DHAKA, "ডিফল্ট হিসেবে ঢাকা, বাংলাদেশের সময় দেখানো হচ্ছে। নিজের এলাকার জন্য উপরের বোতাম চাপুন।");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const locate = () => {
-    if (!navigator.geolocation) return setStatus("এই ব্রাউজারে অবস্থান শনাক্তের সুবিধা নেই।");
+    if (!navigator.geolocation) { void loadFor(DHAKA, DHAKA_NOTE); return; }
     setStatus("আপনার ভৌগোলিক অবস্থান শনাক্ত করা হচ্ছে...");
     navigator.geolocation.getCurrentPosition(
-      async (g) => {
-        const p = { lat: g.coords.latitude, lng: g.coords.longitude };
-        setPos(p);
-        setStatus("নামাজের সময়সূচি সংগ্রহ করা হচ্ছে...");
-        try {
-          const r = await fetch(`https://api.aladhan.com/v1/timings?latitude=${p.lat}&longitude=${p.lng}&method=1&school=1`);
-          const j = await r.json();
-          const t = j?.data?.timings as Timings | undefined;
-          if (!t) throw new Error();
-          setTimes(t);
-          localStorage.setItem(CACHE, JSON.stringify({ pos: p, times: t, at: Date.now() }));
-          setStatus("");
-        } catch { setStatus("নামাজের সময় আনা যায়নি। ইন্টারনেট সংযোগ যাচাই করে আবার চেষ্টা করুন।"); }
-        findMosques(p);
-      },
-      (e) => setStatus(e.code === 1 ? "অবস্থানের অনুমতি দেওয়া হয়নি। ব্রাউজারের সেটিংস থেকে Location চালু করুন।" : "অবস্থান শনাক্ত করা যায়নি, আবার চেষ্টা করুন।"),
+      (g) => loadFor({ lat: g.coords.latitude, lng: g.coords.longitude }),
+      () => loadFor(DHAKA, DHAKA_NOTE),
       { enableHighAccuracy: true, timeout: 15000 },
     );
   };

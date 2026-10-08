@@ -21,9 +21,18 @@ const STAGE_LABEL: Record<string, string> = {
   test: "লাইভ লিংক যাচাই করা হচ্ছে...",
   done: "সম্পন্ন হয়েছে",
 };
+const WAIT_HINTS = ["প্রশ্নের মূল বিষয় বোঝা হচ্ছে...", "প্রয়োজনীয় তথ্য খোঁজা ও সাজানো হচ্ছে...", "উত্তরের কাঠামো তৈরি করা হচ্ছে...", "উত্তর যাচাই করা হচ্ছে..."];
 function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
   const cur = stages[Math.min(current, stages.length - 1)] ?? "think";
   const finished = current >= stages.length;
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    if (finished) return;
+    const t = setInterval(() => setSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [finished]);
+  const label = finished ? STAGE_LABEL["done"] : cur === "think" && sec >= 3 ? WAIT_HINTS[Math.min(Math.floor((sec - 3) / 5), WAIT_HINTS.length - 1)] : STAGE_LABEL[cur] ?? cur;
+  const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
   return (
     <div className="not-prose mb-3 animate-in fade-in">
       <div className="flex items-center gap-2.5 text-sm">
@@ -31,7 +40,8 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
           {!finished && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />}
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
         </span>
-        <span className={finished ? "text-primary" : "live-status font-medium"}>{finished ? STAGE_LABEL["done"] : STAGE_LABEL[cur] ?? cur}</span>
+        <span className={finished ? "text-primary" : "live-status font-medium"}>{label}</span>
+        {!finished && sec > 0 && <span className="text-[11px] text-muted-foreground">{bnNum(sec)} সে.</span>}
       </div>
       <div className="mt-1.5 ml-5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70">
         {stages.slice(0, finished ? stages.length : current).map((s, i) => (
@@ -49,22 +59,50 @@ function splitFollowups(t: string): { body: string; followups: string[] } {
   return { body, followups: followups.slice(0, 3) };
 }
 
-function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
-  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  if (kind === "pdf") {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(`<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>আল আহসান এআই</title><style>body{font-family:'Hind Siliguri',sans-serif;max-width:780px;margin:24px auto;padding:0 16px;line-height:1.8;white-space:pre-wrap}</style></head><body><h2>আল আহসান এআই</h2>${esc(content)}<script>setTimeout(()=>print(),300)<\/script></body></html>`);
-    w.document.close();
-    return;
-  }
-  const blob = kind === "md"
-    ? new Blob([content], { type: "text/markdown;charset=utf-8" })
-    : new Blob([`<html><head><meta charset="utf-8"></head><body style="font-family:'Hind Siliguri',sans-serif;line-height:1.8;white-space:pre-wrap">${esc(content)}</body></html>`], { type: "application/msword" });
+function saveBlob(blob: Blob, name: string) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `al-ahsan-answer.${kind}`;
+  a.download = name;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// আসল PDF ফাইল (ব্রাউজার প্রিন্ট ছাড়া) — বাংলা ঠিক রাখতে লেখাকে ছবি করে PDF-এ বসানো হয়
+async function makePdf(sections: { title?: string; text: string }[], name: string) {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;left:-10000px;top:0;width:760px;padding:32px;background:#ffffff;color:#111111;font-family:'Hind Siliguri',sans-serif;font-size:16px;line-height:1.8";
+  box.innerHTML = `<h2 style="margin:0 0 16px;color:#0b6b3a">আল আহসান এআই</h2>` + sections.map((s) => `${s.title ? `<div style="font-weight:700;margin-top:14px">${esc(s.title)}</div>` : ""}<div style="white-space:pre-wrap;word-break:break-word">${esc(s.text)}</div>`).join("");
+  document.body.appendChild(box);
+  try {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas-pro"), import("jspdf")]);
+    const canvas = await html2canvas(box, { scale: 2, backgroundColor: "#ffffff" });
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    const pagePx = Math.floor((canvas.width * ph) / pw);
+    for (let y = 0, p = 0; y < canvas.height; y += pagePx, p++) {
+      const part = document.createElement("canvas");
+      part.width = canvas.width;
+      part.height = Math.min(pagePx, canvas.height - y);
+      part.getContext("2d")!.drawImage(canvas, 0, -y);
+      if (p) pdf.addPage();
+      pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pw, (part.height * pw) / canvas.width);
+    }
+    saveBlob(pdf.output("blob"), name);
+  } catch { alert("PDF তৈরি করা যায়নি, আবার চেষ্টা করুন।"); }
+  finally { box.remove(); }
+}
+
+async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
+  if (kind === "pdf") return makePdf([{ text: content }], "al-ahsan-answer.pdf");
+  if (kind === "md") return saveBlob(new Blob([content], { type: "text/markdown;charset=utf-8" }), "al-ahsan-answer.md");
+  try {
+    const { Document, Packer, Paragraph, TextRun } = await import("docx");
+    const d = new Document({ sections: [{ children: content.split("\n").map((l) => new Paragraph({ children: [new TextRun({ text: l, font: "Nirmala UI", size: 24 })] })) }] });
+    saveBlob(await Packer.toBlob(d), "al-ahsan-answer.docx");
+  } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
@@ -84,7 +122,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; image?: string };
+type Msg = { role: "user" | "assistant"; content: string; image?: string; error?: boolean };
 type Conv = { id: string; title: string };
 
 function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean }) {
@@ -151,11 +189,7 @@ const mdDone = makeMd(false);
 const mdStreaming = makeMd(true);
 
 function printChat(msgs: Msg[]) {
-  const w = window.open("", "_blank");
-  if (!w) return;
-  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  w.document.write(`<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>আল আহসান এআই — কথোপকথন</title><style>body{font-family:'Hind Siliguri',sans-serif;max-width:780px;margin:24px auto;padding:0 16px;line-height:1.7}.m{margin:14px 0;padding:12px;border-radius:10px;white-space:pre-wrap}.u{background:#eef6f0}.a{border:1px solid #ddd}b{display:block;margin-bottom:4px}</style></head><body><h2>আল আহসান এআই — কথোপকথন</h2>${msgs.map((m) => `<div class="m ${m.role === "user" ? "u" : "a"}"><b>${m.role === "user" ? "আপনি" : "আল আহসান এআই"}</b>${esc(m.content)}</div>`).join("")}<script>setTimeout(()=>print(),300)<\/script></body></html>`);
-  w.document.close();
+  return makePdf(msgs.map((m) => ({ title: m.role === "user" ? "আপনি" : "আল আহসান এআই", text: m.content })), "al-ahsan-chat.pdf");
 }
 
 function downloadChat(msgs: Msg[]) {
@@ -170,11 +204,13 @@ function stripEmoji(t: string): string {
   return t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "");
 }
 
+// বাংলা ভয়েস না থাকলে হিন্দি/ইংরেজি টানে বিকৃত উচ্চারণ নয় — undefined ফেরত দেয়
 function pickVoice(bn: boolean): SpeechSynthesisVoice | undefined {
   const all = window.speechSynthesis.getVoices();
-  if (bn) return all.find((x) => /^bn[-_]BD/i.test(x.lang)) || all.find((x) => /^bn/i.test(x.lang)) || all.find((x) => /^(hi|en)[-_]IN/i.test(x.lang));
+  if (bn) return all.find((x) => /^bn[-_]BD/i.test(x.lang)) || all.find((x) => /^bn/i.test(x.lang));
   return all.find((x) => /^en/i.test(x.lang));
 }
+const NO_BN_VOICE = "আপনার ডিভাইসে বাংলা ভয়েস প্যাক নেই। ফোনের Settings > Google > Text-to-speech (বা Language & input) থেকে বাংলা ভয়েস ডাউনলোড ও চালু করুন।";
 
 // বাক্যভিত্তিক ছোট টুকরোয় পড়া — লম্বা লেখা একবারে দিলে অনেক ব্রাউজারে ভয়েস থেমে যায়
 function speak(text: string) {
@@ -199,6 +235,7 @@ function speak(text: string) {
   }
   if (cur.trim()) chunks.push(cur);
   const run = () => {
+    if (/[\u0980-\u09FF]/.test(clean) && !pickVoice(true)) { alert(NO_BN_VOICE); return; }
     chunks.forEach((c) => {
       const u = new SpeechSynthesisUtterance(c.trim());
       const bn = /[\u0980-\u09FF]/.test(c);
@@ -315,10 +352,13 @@ function ChatPage() {
   };
 
   const toggleMic = () => {
+    const KB_HELP = "এই অ্যাপে সরাসরি মাইক চালু করা যাচ্ছে না। সহজ উপায়: লেখার ঘরে চাপ দিন, তারপর কিবোর্ডের মাইক (🎤) বোতাম চেপে বাংলায় বলুন — কিবোর্ড নিজেই লিখে দেবে। (Gboard-এ ভাষা হিসেবে বাংলা যোগ করে নিন।)";
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return alert("এই ব্রাউজারে ভয়েস টাইপিং নেই। Android-এ Chrome, iPhone-এ Safari ব্যবহার করুন, অথবা কিবোর্ডের মাইক বোতাম চাপুন।");
+    const isWebView = /; wv\)|AppsGeyser|WebView/i.test(navigator.userAgent);
+    if (!SR) return alert(KB_HELP);
     if (listening) return recRef.current?.stop();
-    const rec = new SR();
+    let rec: any;
+    try { rec = new SR(); } catch { return alert(KB_HELP); }
     rec.lang = "bn-BD";
     rec.interimResults = true;
     rec.continuous = false;
@@ -331,11 +371,12 @@ function ChatPage() {
     rec.onend = () => setListening(false);
     rec.onerror = (e: any) => {
       setListening(false);
-      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") alert("মাইক্রোফোনের অনুমতি দিন: ব্রাউজারের ঠিকানার পাশে 🔒 চিহ্নে চাপ দিয়ে Microphone চালু করুন।");
+      if (e?.error === "service-not-allowed" || (isWebView && e?.error === "not-allowed") || e?.error === "network" || e?.error === "audio-capture") alert(KB_HELP);
+      else if (e?.error === "not-allowed") alert("মাইক্রোফোনের অনুমতি দিন: ব্রাউজারের ঠিকানার পাশে 🔒 চিহ্নে চাপ দিয়ে Microphone চালু করুন। না হলে কিবোর্ডের মাইক বোতাম ব্যবহার করুন।");
       else if (e?.error === "no-speech") alert("কোনো কথা শোনা যায়নি, আবার চেষ্টা করুন।");
     };
     recRef.current = rec;
-    try { rec.start(); setListening(true); } catch { setListening(false); }
+    try { rec.start(); setListening(true); } catch { setListening(false); alert(KB_HELP); }
   };
 
   const send = async () => {
@@ -356,20 +397,24 @@ function ChatPage() {
       convId = data.id;
       setActive(convId);
     }
-    const history: Msg[] = [...msgs, { role: "user", content: text, ...(img ? { image: img } : {}) }];
-    setMsgs([...history, { role: "assistant", content: "" }]);
+    const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...(img ? { image: img } : {}) }];
+    setMsgs([...msgs, { role: "user", content: text, ...(img ? { image: img } : {}) }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
     await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: img ? `[ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
 
     let full = "";
+    let failed = false;
+    let wrote = false;
+    const showErr = (msg: string) => { failed = true; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full ? `${full}\n\n${msg}` : msg, error: true }]); };
     try {
       const { data: s } = await supabase.auth.getSession();
       abortRef.current = new AbortController();
+      // টোকেন বাঁচাতে: শুধু শেষ ৮টি বার্তা; পুরোনো বড় বার্তা ছোট করে পাঠানো
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-40).map((m, i, arr) => { const last = i === arr.length - 1; const content = (last ? apiText : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]").slice(0, 39000); return last ? { ...m, content } : { role: m.role, content }; }) }),
+        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? apiText : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 36000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
@@ -384,9 +429,10 @@ function ChatPage() {
         try {
           const j = JSON.parse(d);
           if (j.stage) return pushStage(j.stage);
-          if (j.error) { full += `\n\n${j.error}`; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); return; }
+          if (j.error) { showErr(String(j.error)); return; }
           const delta = j.choices?.[0]?.delta?.content;
           if (delta) {
+            if (!wrote) { wrote = true; pushStage("write"); }
             full += delta;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
           }
@@ -405,17 +451,25 @@ function ChatPage() {
       buf += dec.decode();
       buf.split("\n").forEach(handle);
     } catch (e: any) {
-      if (e?.name !== "AbortError") full = full || `ত্রুটি: ${e?.message || "ত্রুটি হয়েছে"}`;
-      setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
+      if (e?.name !== "AbortError") showErr(`ত্রুটি: ${e?.message || "ত্রুটি হয়েছে"}। আবার চেষ্টা করুন।`);
     }
     setLoading(false);
-    if (full) {
+    // ত্রুটি হলে কিছুই ডাটাবেজে সেভ হবে না — শুধু পর্দায় সতর্কবার্তা
+    if (full && !failed) {
       // অসম্পূর্ণ কোড ব্লক বন্ধ করা, যাতে লাইভ লিংক কোডের ভেতরে না পড়ে
       if (((full.match(/```/g) || []).length) % 2 === 1) {
         full += "\n```";
         setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
       }
-      const htmlCode = full.match(/```html\s*\n([\s\S]*?)(?:```|$)/i)?.[1];
+      // HTML, CSS, JS আলাদা ব্লকে থাকলেও একত্র করে একটি পেজ বানানো
+      const grab = (lang: string) => [...full.matchAll(new RegExp("```(?:" + lang + ")\\s*\\n([\\s\\S]*?)```", "gi"))].map((m) => m[1]!).join("\n");
+      let htmlCode: string | undefined = grab("html");
+      const css = grab("css"), js = grab("javascript|js");
+      if (htmlCode || (css && js)) {
+        if (!/<html/i.test(htmlCode)) htmlCode = `<!DOCTYPE html>\n<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>\n${htmlCode}\n</body></html>`;
+        if (css) htmlCode = /<\/head>/i.test(htmlCode) ? htmlCode.replace(/<\/head>/i, `<style>\n${css}\n</style>\n</head>`) : `<style>${css}</style>` + htmlCode;
+        if (js) htmlCode = /<\/body>/i.test(htmlCode) ? htmlCode.replace(/<\/body>(?![\s\S]*<\/body>)/i, `<script>\n${js}\n</script>\n</body>`) : htmlCode + `<script>${js}</script>`;
+      } else htmlCode = undefined;
       if (htmlCode && /<html/i.test(htmlCode)) {
         pushStage("build");
         try {
