@@ -567,6 +567,3 @@ async function webSearch(q: string): Promise<string> {
   const n = await news;
   return (n ? n + "\n\n" : "") + out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
 }
-
- "");
-}
