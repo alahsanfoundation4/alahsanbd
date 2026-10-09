@@ -681,7 +681,8 @@ function ChatPage() {
         </header>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-3xl px-3 py-6 sm:px-4">
+          <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
+
             {msgs.length === 0 && (
               <div className="mt-20 flex flex-col items-center text-center">
                 <Logo size={64} />
