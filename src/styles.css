@@ -136,3 +136,51 @@ body { font-family: var(--font-body); }
 /* Live activity status: shimmering text while real work runs */
 .live-status { background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--primary) 45%, var(--muted-foreground) 90%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: live-shimmer 1.8s linear infinite; }
 @keyframes live-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+/* টেক্সটে চকচকে আলো চলার অ্যানিমেশন */
+.live-status-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--foreground) 0%,
+    var(--primary) 25%,
+    #38bdf8 50%,
+    var(--primary) 75%,
+    var(--foreground) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: liveTextShimmer 2.2s linear infinite;
+}
+
+@keyframes liveTextShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* প্রোগ্রেস বারে চকচকে আলো দৌড়ানোর অ্যানিমেশন */
+.live-bar-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.75) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: liveBarShimmer 1.8s infinite linear;
+}
+
+@keyframes liveBarShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* আইকন ঘোরার স্মুথ অ্যানিমেশন */
+@keyframes spinSlowAnimation {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spinSlowAnimation 5s linear infinite;
+}
