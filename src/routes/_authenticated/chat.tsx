@@ -47,11 +47,13 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
     ? 100
     : Math.min(95, Math.max(15, Math.round((currentStepNum / (totalStages + 1)) * 100) + Math.min(sec * 3, 15)));
 
-  const info = finished
+  const fallback = { label: curStageKey, sub: "প্রসেসিং চলছে...", icon: "sparkles" };
+  const rawInfo: { label: string; sub: string; icon?: string } | undefined = finished
     ? STAGE_CONFIG["done"]
     : curStageKey === "think" && sec >= 4
     ? WAIT_HINTS[Math.min(Math.floor((sec - 4) / 4), WAIT_HINTS.length - 1)]
-    : STAGE_CONFIG[curStageKey] ?? { label: curStageKey, sub: "প্রসেসিং চলছে...", icon: "sparkles" };
+    : STAGE_CONFIG[curStageKey];
+  const info = { ...fallback, ...(rawInfo ?? {}), icon: rawInfo?.icon ?? (curStageKey === "think" ? "brain" : "sparkles") };
 
   const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
 
