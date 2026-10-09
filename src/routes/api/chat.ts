@@ -517,8 +517,32 @@ async function newsRss(q: string): Promise<string> {
   return items.length ? `=== সর্বশেষ সংবাদ শিরোনাম (Google News) ===\n${items.join("\n")}` : "";
 }
 
+async function tavilySearch(q: string): Promise<{ url: string; title: string; snip: string }[]> {
+  const key = process.env["TAVILY_API_KEY"]?.trim();
+  if (!key) return [];
+  const r = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: key, query: q.slice(0, 300), max_results: 5, search_depth: "basic" }),
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!r?.ok) return [];
+  const data = (await r.json().catch(() => null)) as { results?: { url: string; title: string; content: string }[] } | null;
+  if (!data?.results?.length) return [];
+  return data.results.map((it) => ({
+    url: it.url,
+    title: it.title || "",
+    snip: it.content || "",
+  }));
+}
+
 async function webSearch(q: string): Promise<string> {
   const news = /(খবর|সংবাদ|news|আজকে?র?|today|সর্বশেষ|latest)/i.test(q) ? newsRss(q.replace(/(আজকের|আজকে|কী|কি|\?)/g, " ").trim() || "বাংলাদেশ") : Promise.resolve("");
+  const tavily = await tavilySearch(q);
+  if (tavily.length) {
+    const n = await news;
+    return [n, tavily.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n")].filter(Boolean).join("\n\n");
+  }
   const html = await ddgHtml(q);
   if (!html) {
     const b = await bingSearch(q);
@@ -542,4 +566,7 @@ async function webSearch(q: string): Promise<string> {
   const top = await readUrls(out.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
   const n = await news;
   return (n ? n + "\n\n" : "") + out.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n") + (top ? `\n\n--- শীর্ষ পেজের লেখা ---\n${top}` : "");
+}
+
+ "");
 }
