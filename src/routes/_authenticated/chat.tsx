@@ -744,7 +744,8 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-border/60 p-2 sm:p-4">
+        <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4">
+        
           {(doc || docBusy || image) && (
             <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground">
               {image && <span className="rounded-md border border-border px-2 py-1">ছবি সংযুক্ত <button onClick={() => setImage(null)} className="ml-1 text-destructive">x</button></span>}
