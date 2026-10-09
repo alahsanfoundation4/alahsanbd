@@ -8,7 +8,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "আল আহসান এআই — Al Ahsan AI" },
-      { name: "description", content: "মুহিউস সুন্নাহ ফাউন্ডেশন বাংলাদেশের শক্তিশালী বাংলা এআই সহকারী, ভয়েস সহ।" },
+      { name: "description", content: "আল আহসান ফাউন্ডেশন বাংলাদেশের শক্তিশালী বাংলা এআই সহকারী, ভয়েস সহ।" },
       { property: "og:title", content: "আল আহসান এআই — Al Ahsan AI" },
       { property: "og:description", content: "শক্তিশালী বাংলা এআই সহকারী — লিখুন বা কথা বলুন।" },
       { property: "og:type", content: "website" },
@@ -127,7 +127,7 @@ function Landing() {
         <div className="grid items-center gap-10 rounded-3xl border border-border bg-card/60 p-8 md:grid-cols-2 md:p-12">
           <div>
             <p className="text-sm font-semibold text-primary">আমাদের সম্পর্কে</p>
-            <h2 className="mt-3 font-display text-3xl md:text-4xl">মুহিউস সুন্নাহ ফাউন্ডেশন বাংলাদেশ</h2>
+            <h2 className="mt-3 font-display text-3xl md:text-4xl">আল আহসান ফাউন্ডেশন বাংলাদেশ</h2>
             <p className="mt-4 leading-relaxed text-muted-foreground">
               সুন্নাহর আলোয় জ্ঞান ও সেবা ছড়িয়ে দেওয়াই আমাদের লক্ষ্য। আধুনিক প্রযুক্তিকে কাজে লাগিয়ে সবার হাতে সহজে নির্ভরযোগ্য জ্ঞান পৌঁছে দিতে আমরা তৈরি করেছি আল আহসান এআই।
             </p>
@@ -157,7 +157,7 @@ function Landing() {
       </section>
 
       <footer className="relative z-10 border-t border-border py-8 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} মুহিউস সুন্নাহ ফাউন্ডেশন বাংলাদেশ · আল আহসান এআই
+        © {new Date().getFullYear()} আল আহসান ফাউন্ডেশন বাংলাদেশ · আল আহসান এআই
       </footer>
     </main>
   );

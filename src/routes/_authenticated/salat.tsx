@@ -50,6 +50,7 @@ function SalatPage() {
   const [pos, setPos] = useState<Pos | null>(null);
   const [times, setTimes] = useState<Timings | null>(null);
   const [mosques, setMosques] = useState<Mosque[] | null>(null);
+  const [radius, setRadius] = useState(3);
   const [status, setStatus] = useState("");
   const [heading, setHeading] = useState<number | null>(null);
 
@@ -90,18 +91,25 @@ function SalatPage() {
     );
   };
 
-  const findMosques = async (p: Pos) => {
+  const findMosques = async (p: Pos, km = radius) => {
     setMosques(null);
-    const q = `[out:json][timeout:20];(node["amenity"="place_of_worship"]["religion"="muslim"](around:3000,${p.lat},${p.lng});way["amenity"="place_of_worship"]["religion"="muslim"](around:3000,${p.lat},${p.lng}););out center 40;`;
-    try {
-      const r = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: "data=" + encodeURIComponent(q) });
-      const j = await r.json();
-      const list: Mosque[] = (j.elements || []).map((e: any) => {
-        const lat = e.lat ?? e.center?.lat, lng = e.lon ?? e.center?.lon;
-        return { name: e.tags?.["name:bn"] || e.tags?.name || "নামহীন মসজিদ", lat, lng, dist: distKm(p, { lat, lng }) };
-      }).filter((m: Mosque) => m.lat && m.lng).sort((a: Mosque, b: Mosque) => a.dist - b.dist).slice(0, 15);
-      setMosques(list);
-    } catch { setMosques([]); }
+    const m = km * 1000;
+    const q = `[out:json][timeout:25];(node["amenity"="place_of_worship"]["religion"="muslim"](around:${m},${p.lat},${p.lng});way["amenity"="place_of_worship"]["religion"="muslim"](around:${m},${p.lat},${p.lng});node["building"="mosque"](around:${m},${p.lat},${p.lng});way["building"="mosque"](around:${m},${p.lat},${p.lng}););out center 60;`;
+    const servers = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+    for (const url of servers) {
+      try {
+        const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q) });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const list: Mosque[] = (j.elements || []).map((e: any) => {
+          const lat = e.lat ?? e.center?.lat, lng = e.lon ?? e.center?.lon;
+          return { name: e.tags?.["name:bn"] || e.tags?.name || "নামহীন মসজিদ", lat, lng, dist: distKm(p, { lat, lng }) };
+        }).filter((x: Mosque) => x.lat && x.lng).sort((a: Mosque, b: Mosque) => a.dist - b.dist).slice(0, 20);
+        setMosques(list);
+        return;
+      } catch { /* পরের সার্ভার */ }
+    }
+    setMosques([]);
   };
 
   const startCompass = async () => {
@@ -158,9 +166,15 @@ function SalatPage() {
 
         {pos && (
           <section className={card}>
-            <h2 className="font-display text-xl text-primary">নিকটস্থ মসজিদ (৩ কিমির মধ্যে)</h2>
+            <h2 className="font-display text-xl text-primary">নিকটস্থ মসজিদ</h2>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[3, 5, 10].map((k) => (
+                <button key={k} onClick={() => { setRadius(k); findMosques(pos, k); }} className={`rounded-lg border px-3 py-1.5 text-sm ${radius === k ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{bn(k + " কিমি")}</button>
+              ))}
+              <a href={`https://www.google.com/maps/search/mosque/@${pos.lat},${pos.lng},15z`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-primary/40 px-3 py-1.5 text-sm text-primary">গুগল ম্যাপসে সব মসজিদ দেখুন</a>
+            </div>
             {mosques === null ? <p className="mt-2 text-sm live-status">কাছের মসজিদ খোঁজা হচ্ছে...</p>
-              : mosques.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">মানচিত্রের তথ্যে কাছাকাছি কোনো মসজিদ পাওয়া যায়নি।</p>
+              : mosques.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">এই দূরত্বে মানচিত্রের তথ্যে মসজিদ পাওয়া যায়নি — দূরত্ব বাড়ান বা গুগল ম্যাপসে দেখুন।</p>
               : <div className="mt-2 divide-y divide-border">
                   {mosques.map((m, i) => (
                     <div key={i} className="flex items-center justify-between gap-3 py-2.5">
