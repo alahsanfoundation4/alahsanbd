@@ -199,6 +199,7 @@ function AdminPage() {
         </section>
         <KeyPool pool={pool} setPool={setPool} show={show} />
         <DriveMemory />
+        <FatwaBank />
         <HealthCheck />
       </div>
 
@@ -250,6 +251,81 @@ function DriveMemory() {
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="নতুন কিছু মনে রাখাতে লিখুন…" className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:border-primary" />
         <button onClick={() => { if (text.trim().length >= 3) { call({ action: "add", text }); setText(""); } }} className="rounded-lg bg-primary px-4 text-primary-foreground">যোগ</button>
       </div>
+    </section>
+  );
+}
+
+type FatwaRow = { id: string; title: string; source: string; reference: string; original_text: string; ruling: string; keywords: string };
+const EMPTY_F = { title: "", source: "", reference: "", original_text: "", ruling: "", keywords: "" };
+
+function FatwaBank() {
+  const [rows, setRows] = useState<FatwaRow[] | null>(null);
+  const [f, setF] = useState(EMPTY_F);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
+  const [q, setQ] = useState("");
+  const load = async () => {
+    const { data, error } = await supabase.from("fatwa_records").select("id,title,source,reference,original_text,ruling,keywords").order("created_at", { ascending: false });
+    if (error) return setMsg(error.message);
+    setRows(data as FatwaRow[]);
+  };
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (f.title.trim().length < 2 || f.ruling.trim().length < 5) return setMsg("বিষয় ও ফতোয়া লেখা আবশ্যক।");
+    const payload = { ...f, updated_at: new Date().toISOString() };
+    const { error } = editId
+      ? await supabase.from("fatwa_records").update(payload).eq("id", editId)
+      : await supabase.from("fatwa_records").insert(payload);
+    if (error) return setMsg(error.message);
+    setMsg(editId ? "আপডেট হয়েছে।" : "সংরক্ষিত হয়েছে।");
+    setF(EMPTY_F); setEditId(null); load();
+  };
+  const del = async (id: string) => {
+    if (!confirm("এই ফতোয়াটি মুছবেন?")) return;
+    const { error } = await supabase.from("fatwa_records").delete().eq("id", id);
+    if (error) return setMsg(error.message);
+    load();
+  };
+  const cls = "mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:border-primary";
+  const shown = rows?.filter((r) => !q || (r.title + r.keywords + r.ruling).toLowerCase().includes(q.toLowerCase()));
+  return (
+    <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
+      <h2 className="font-display text-xl text-primary">ফতোয়া ভান্ডার (অনুমোদিত নলেজ বেস)</h2>
+      <p className="mt-1 text-sm text-muted-foreground">এখানে যোগ করা ফতোয়া ও কিতাবের রেফারেন্স দেখে এআই ফিকহি প্রশ্নের উত্তর দেবে এবং হুবহু সূত্র উল্লেখ করবে।</p>
+      <div className="mt-3 grid gap-2">
+        <input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="বিষয় / প্রশ্ন (যেমন: সফরে নামাজ কসর)" className={cls} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })} placeholder="কিতাব / ফতোয়া বোর্ড" className={cls} />
+          <input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} placeholder="খণ্ড, পৃষ্ঠা, হাদিস নম্বর" className={cls} />
+        </div>
+        <textarea value={f.original_text} onChange={(e) => setF({ ...f, original_text: e.target.value })} rows={3} placeholder="মূল এবারত (আরবি/উর্দু, ঐচ্ছিক)" className={cls} />
+        <textarea value={f.ruling} onChange={(e) => setF({ ...f, ruling: e.target.value })} rows={5} placeholder="বাংলা ফতোয়া / সিদ্ধান্ত" className={cls} />
+        <input value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} placeholder="মূল শব্দ (কমা দিয়ে): সফর, কসর, নামাজ" className={cls} />
+        <div className="flex items-center gap-2">
+          <button onClick={save} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">{editId ? "আপডেট করুন" : "ফতোয়া যোগ করুন"}</button>
+          {editId && <button onClick={() => { setEditId(null); setF(EMPTY_F); }} className="rounded-lg border border-border px-4 py-2">বাতিল</button>}
+          <span className="text-sm text-muted-foreground">{msg}</span>
+        </div>
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ভান্ডারে খুঁজুন…" className={`${cls} mt-4`} />
+      {!rows && <p className="mt-3 text-sm text-muted-foreground">লোড হচ্ছে…</p>}
+      <ul className="mt-3 space-y-2">
+        {shown?.map((r) => (
+          <li key={r.id} className="rounded-lg border border-border px-3 py-2 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold break-words">{r.title}</p>
+                <p className="text-muted-foreground break-words">{r.source} {r.reference}</p>
+              </div>
+              <div className="flex shrink-0 gap-3">
+                <button onClick={() => { setEditId(r.id); setF({ title: r.title, source: r.source, reference: r.reference, original_text: r.original_text, ruling: r.ruling, keywords: r.keywords }); }} className="text-primary">সম্পাদনা</button>
+                <button onClick={() => del(r.id)} className="text-destructive">মুছুন</button>
+              </div>
+            </div>
+          </li>
+        ))}
+        {rows?.length === 0 && <li className="text-sm text-muted-foreground">এখনো কোনো ফতোয়া যোগ করা হয়নি।</li>}
+      </ul>
     </section>
   );
 }
