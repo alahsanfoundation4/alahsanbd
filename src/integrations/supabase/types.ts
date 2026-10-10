@@ -134,6 +134,42 @@ export type Database = {
         }
         Relationships: []
       }
+      fatwa_records: {
+        Row: {
+          created_at: string
+          id: string
+          keywords: string
+          original_text: string
+          reference: string
+          ruling: string
+          source: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keywords?: string
+          original_text?: string
+          reference?: string
+          ruling: string
+          source?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keywords?: string
+          original_text?: string
+          reference?: string
+          ruling?: string
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       health_checks: {
         Row: {
           created_at: string
