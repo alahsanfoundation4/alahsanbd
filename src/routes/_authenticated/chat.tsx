@@ -87,7 +87,7 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
 
         {/* কতটুকু কাজ হলো ও সময় */}
         <div className="shrink-0 text-right">
-          <div className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary border border-primary/20">
+          <div className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
             <span>{bnNum(rawPercent)}%</span>
           </div>
           {!finished && sec > 0 && (
@@ -99,13 +99,13 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
       </div>
 
       {/* প্রোগ্রেস বার (চকচক অ্যানিমেশন ও লাইভ ফিল সহ) */}
-      <div className="relative mt-3.5 h-2 w-full overflow-hidden rounded-full bg-muted/60">
+      <div className="relative mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="relative h-full rounded-full bg-gradient-to-r from-primary/70 via-primary to-primary transition-all duration-700 ease-out"
+          className="relative h-full rounded-full bg-primary transition-all duration-700 ease-out"
           style={{ width: `${rawPercent}%` }}
         >
           {/* চকচকে আলোর গ্লাইডার */}
-          {!finished && <div className="live-bar-shimmer absolute inset-0" />}
+          
         </div>
       </div>
 
@@ -126,7 +126,7 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
                   isDone
                     ? "w-4 bg-primary"
                     : isCurrent
-                    ? "w-6 bg-primary animate-pulse"
+                    ? "w-6 bg-primary/60"
                     : "w-2 bg-muted-foreground/30"
                 }`}
                 title={STAGE_CONFIG[st]?.label ?? st}
