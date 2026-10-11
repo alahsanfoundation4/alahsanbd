@@ -69,22 +69,16 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
   };
 
   return (
-    <div className="not-prose my-3.5 overflow-hidden rounded-2xl border border-primary/25 bg-card/90 p-4 shadow-md backdrop-blur-sm animate-in fade-in duration-300">
-      {/* হেডার অংশ: আইকন, রানিং স্ট্যাটাস ও শতাংশ */}
+    <div className="not-prose my-3.5 overflow-hidden rounded-xl border border-border bg-card p-3.5 shadow-sm animate-in fade-in duration-300">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shadow-inner">
-            {renderIcon(info.icon)}
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            {finished ? <CheckCircle2 size={16} className="text-primary" /> : <Loader2 size={16} className="text-primary animate-spin" />}
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="live-status-shimmer truncate text-sm font-bold sm:text-base">
-                {info.label}
-              </span>
-              {!finished && (
-                <span className="inline-flex h-2 w-2 rounded-full bg-primary animate-ping" />
-              )}
-            </div>
+            <span className="block truncate text-sm font-semibold text-foreground">
+              {info.label}
+            </span>
             <p className="truncate text-xs text-muted-foreground mt-0.5">
               {info.sub}
             </p>
