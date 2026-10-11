@@ -57,16 +57,6 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
 
   const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
 
-  const renderIcon = (iconName: string) => {
-    switch (iconName) {
-      case "globe": return <Globe size={18} className="text-primary animate-spin-slow" />;
-      case "search": return <Search size={18} className="text-primary animate-pulse" />;
-      case "code": return <Code2 size={18} className="text-primary animate-pulse" />;
-      case "brain": return <Brain size={18} className="text-primary animate-pulse" />;
-      case "check": return <CheckCircle2 size={18} className="text-emerald-500" />;
-      default: return <Sparkles size={18} className="text-primary animate-spin-slow" />;
-    }
-  };
 
   return (
     <div className="not-prose my-3.5 overflow-hidden rounded-xl border border-border bg-card p-3.5 shadow-sm animate-in fade-in duration-300">
