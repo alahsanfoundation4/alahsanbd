@@ -64,7 +64,7 @@ const BASE_PROMPT = `তুমি "আল আহসান এআই" (Al Ahsan A
 
 ## ওয়েবসাইট ও কোড তৈরি (১ নম্বর অগ্রাধিকার — প্রথমবারেই প্রিমিয়াম, প্রোডাকশন-রেডি)
 ব্যবহারকারী ওয়েবসাইট, পেজ, অ্যাপ, ল্যান্ডিং পেজ, ফর্ম, গেম বা যেকোনো কোড চাইলে:
-- দৈর্ঘ্য: প্রথমবারেই সর্বোচ্চ বিস্তারিত ও সম্পূর্ণ কোড দেবে (বড় সাইটে ৬০,০০০–১,০০,০০০ অক্ষর পর্যন্ত)। "// বাকি কোড", "...", "এখানে যোগ করুন", placeholder বা খালি ফাংশন কঠোরভাবে নিষিদ্ধ। প্রতিটি সেকশনে বাস্তব, প্রাসঙ্গিক বাংলা কনটেন্ট লিখবে।
+- দৈর্ঘ্য (বাধ্যতামূলক): ওয়েবসাইটের কোড কমপক্ষে ৫০,০০০ অক্ষরের হবে — কখনো ছোট বা সাদামাটা নয়। কমপক্ষে ১২টি সমৃদ্ধ সেকশন, প্রতিটিতে একাধিক কার্ড, বিস্তারিত বাংলা লেখা (প্রতি কার্ডে ২–৪ বাক্য), নিজস্ব CSS অ্যানিমেশন ও পূর্ণ জাভাস্ক্রিপ্ট দেবে। "// বাকি কোড", "...", "এখানে যোগ করুন", placeholder বা খালি ফাংশন কঠোরভাবে নিষিদ্ধ। লেখা শেষ করার আগে নিজে যাচাই করবে কোড যথেষ্ট বড় ও সম্পূর্ণ কিনা।
 - একটি একক ফাইলের সম্পূর্ণ HTML দেবে: \`<!DOCTYPE html>\` থেকে \`</html>\` পর্যন্ত; শুধু একটি \`\`\`html ব্লক।
 - হেডারে Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), Hind Siliguri ও Inter ফন্ট (<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">), এবং tailwind.config দিয়ে বিষয়ের সাথে মানানসই একটি নিজস্ব ব্র্যান্ড রঙের প্যালেট সেট করবে।
 - ডিজাইন মান (Lovable/Stripe/Apple মানের): সাধারণ টেমপ্লেট নয়। বড় সাহসী টাইপোগ্রাফি, প্রচুর হোয়াইট স্পেস, gradient/glass ইফেক্ট, নরম shadow, rounded-2xl কার্ড, hover ও scroll-reveal অ্যানিমেশন (IntersectionObserver), sticky ন্যাভবার ও মোবাইল হ্যামবার্গার মেনু, ডার্ক/লাইট মোড টগল।
@@ -146,7 +146,13 @@ export const Route = createFileRoute("/api/chat")({
         const provider = (s?.provider ?? "lovable") as Provider;
         const stored = (s?.model || "").trim();
         const retired = /^gemini-1\.|^gemini-2\.|^gpt-3|^o1-|^gemini-pro$|^gemini-flash-latest$/i.test(stored);
-        const model = !stored || retired ? DEFAULT_MODELS[provider] : stored;
+        const baseModel = !stored || retired ? DEFAULT_MODELS[provider] : stored;
+        // ওয়েবসাইট/কোড অনুরোধে হালকা (lite) মডেল ছোট কোড দেয় — তাই শক্তিশালী মডেলে পাঠানো
+        const lastText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|পেজ বানা|অ্যাপ বানা/i.test(lastText);
+        const model = isSiteReq && /lite/i.test(baseModel)
+          ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
+          : baseModel;
 
         // API keys
         let url = "https://ai.gateway.lovable.dev/v1/chat/completions";

@@ -66,7 +66,7 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
             {finished ? <CheckCircle2 size={16} className="text-primary" /> : <Loader2 size={16} className="text-primary animate-spin" />}
           </div>
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">
+            <span className={`block truncate text-sm font-semibold ${finished ? "text-foreground" : "live-status-shimmer"}`}>
               {info.label}
             </span>
             <p className="truncate text-xs text-muted-foreground mt-0.5">
@@ -89,13 +89,12 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
       </div>
 
       {/* প্রোগ্রেস বার (চকচক অ্যানিমেশন ও লাইভ ফিল সহ) */}
-      <div className="relative mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
+      <div className="relative mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="relative h-full rounded-full bg-primary transition-all duration-700 ease-out"
+          className={`relative h-full overflow-hidden rounded-full bg-primary transition-all duration-700 ease-out ${finished ? "" : "live-bar-glow"}`}
           style={{ width: `${rawPercent}%` }}
         >
-          {/* চকচকে আলোর গ্লাইডার */}
-          
+          {!finished && <div className="live-bar-shimmer absolute inset-0" />}
         </div>
       </div>
 
