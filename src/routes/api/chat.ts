@@ -14,6 +14,10 @@ const Body = z.object({
           .regex(/^data:image\/(png|jpe?g|webp|gif);base64,/)
           .max(4_000_000)
           .optional(),
+        images: z
+          .array(z.string().regex(/^data:image\/(png|jpe?g|webp|gif);base64,/).max(2_500_000))
+          .max(5)
+          .optional(),
       })
     )
     .min(1)
@@ -182,15 +186,19 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        // Attach images
+        // Attach images (up to 5 per message)
+        const imgsOf = (i: number) => {
+          const m = parsed.data.messages[i];
+          return [...(m?.images ?? []), ...(m?.image ? [m.image] : [])].slice(0, 5);
+        };
         const msgs: { role: string; content: unknown }[] = textMsgs.map((m, i) => {
-          const img = parsed.data.messages[i]?.image;
-          if (m.role !== "user" || !img) return m;
-          return { role: m.role, content: [{ type: "text", text: m.content || "এই ছবিটি বিশ্লেষণ করুন।" }, { type: "image_url", image_url: { url: img } }] };
+          const imgs = imgsOf(i);
+          if (m.role !== "user" || !imgs.length) return m;
+          return { role: m.role, content: [{ type: "text", text: m.content || "এই ছবিগুলো বিশ্লেষণ করুন।" }, ...imgs.map((url) => ({ type: "image_url", image_url: { url } }))] };
         });
 
-        if (parsed.data.messages.some((m) => m.image))
-          system += "\n\nব্যবহারকারী ছবি পাঠিয়েছেন। ছবিটি মনোযোগ দিয়ে দেখে বিস্তারিত বর্ণনা, লেখা থাকলে হুবহু পাঠ (OCR) ও বিশ্লেষণ দাও।";
+        if (parsed.data.messages.some((_, i) => imgsOf(i).length))
+          system += "\n\nব্যবহারকারী এক বা একাধিক ছবি পাঠিয়েছেন। প্রতিটি ছবি মনোযোগ দিয়ে দেখে বিস্তারিত বর্ণনা, লেখা থাকলে হুবহু পাঠ (OCR) ও বিশ্লেষণ দাও। ওয়েবসাইট তৈরির অনুরোধ হলে ছবিগুলোকে ডিজাইন/তথ্যের রেফারেন্স হিসেবে মেনে চলবে এবং ছবিতে থাকা নাম, ঠিকানা, ফোন, পণ্য, দাম হুবহু ব্যবহার করবে।";
 
         if (s?.admin_note?.trim()) {
           system += `\n\n=== অ্যাডমিনের নির্দেশনা (সর্বোচ্চ অগ্রাধিকার — অবশ্যই মেনে চলবে) ===\n${s.admin_note.trim()}`;

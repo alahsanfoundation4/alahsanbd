@@ -20,6 +20,7 @@ import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiMemoryRouteImport } from './routes/api/memory'
 import { Route as ApiPagesRouteImport } from './routes/api/pages'
 import { Route as ApiSettingsRouteImport } from './routes/api/settings'
+import { Route as ImgSplatRouteImport } from './routes/img.$'
 import { Route as PIdRouteImport } from './routes/p/$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -76,6 +77,11 @@ const ApiSettingsRoute = ApiSettingsRouteImport.update({
   path: '/api/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImgSplatRoute = ImgSplatRouteImport.update({
+  id: '/img/$',
+  path: '/img/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PIdRoute = PIdRouteImport.update({
   id: '/p/$id',
   path: '/p/$id',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
   '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
 }
 export interface FileRoutesByTo {
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
   '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
 }
 export interface FileRoutesById {
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
   '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
 }
 export interface FileRouteTypes {
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/api/memory'
     | '/api/pages'
     | '/api/settings'
+    | '/img/$'
     | '/p/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/api/memory'
     | '/api/pages'
     | '/api/settings'
+    | '/img/$'
     | '/p/$id'
   id:
     | '__root__'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/api/memory'
     | '/api/pages'
     | '/api/settings'
+    | '/img/$'
     | '/p/$id'
   fileRoutesById: FileRoutesById
 }
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   ApiMemoryRoute: typeof ApiMemoryRoute
   ApiPagesRoute: typeof ApiPagesRoute
   ApiSettingsRoute: typeof ApiSettingsRoute
+  ImgSplatRoute: typeof ImgSplatRoute
   PIdRoute: typeof PIdRoute
 }
 
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/img/$': {
+      id: '/img/$'
+      path: '/img/$'
+      fullPath: '/img/$'
+      preLoaderRoute: typeof ImgSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/p/$id': {
       id: '/p/$id'
       path: '/p/$id'
@@ -291,6 +311,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMemoryRoute: ApiMemoryRoute,
   ApiPagesRoute: ApiPagesRoute,
   ApiSettingsRoute: ApiSettingsRoute,
+  ImgSplatRoute: ImgSplatRoute,
   PIdRoute: PIdRoute,
 }
 export const routeTree = rootRouteImport
