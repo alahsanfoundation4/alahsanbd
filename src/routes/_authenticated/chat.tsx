@@ -746,31 +746,6 @@ function ChatPage() {
           </div>
         </div>
         <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4">
-          {/* ইউআরএল দিন (কাস্টম স্লাগ) ফিল্ড */}
-          <div className="mx-auto mb-2 flex max-w-3xl items-center">
-            <div className="flex flex-1 items-center gap-1.5 rounded-xl border border-border/80 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground focus-within:border-primary/60 focus-within:bg-card">
-              <Globe size={14} className="shrink-0 text-primary" />
-              <span className="shrink-0 font-medium text-foreground">ইউআরএল দিন:</span>
-              <input
-                type="text"
-                value={customSlug}
-                onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                placeholder="যেমন: my-school বা fashion-shop (ঐচ্ছিক)"
-                className="w-full bg-transparent outline-none placeholder:text-muted-foreground/70"
-              />
-              {customSlug && (
-                <button
-                  type="button"
-                  onClick={() => setCustomSlug("")}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  title="মুছুন"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* সংযুক্ত ছবি ও ফাইলের প্রিভিউ */}
           {(doc || docBusy || images.length > 0) && (
             <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted-foreground">
