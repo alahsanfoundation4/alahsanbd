@@ -675,39 +675,7 @@ function ChatPage() {
             {voiceOut ? <Volume2 size={16} /> : <VolumeX size={16} />} <span className="hidden sm:inline">ভয়েস উত্তর</span>
           </button>
           </div>
-        </header>
-        {/* স্ক্রিনের একদম উপরে বড় ও স্পষ্ট "ইউআরএল দিন" বার */}
-        <div className="border-b border-border/80 bg-card/70 px-4 py-2.5 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-3xl items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Globe size={18} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-foreground">ইউআরএল দিন:</span>
-                <input
-                  type="text"
-                  value={customSlug}
-                  onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="যেমন: my-school বা fashion-shop (ঐচ্ছিক)"
-                  className="w-full bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/60"
-                />
-                {customSlug && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomSlug("")}
-                    className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    মুছুন
-                  </button>
-                )}
-              </div>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {customSlug ? `আপনার ওয়েবসাইটের লিংক হবে: alahsanai.lovable.app/${customSlug}` : "পছন্দের ইংরেজি নাম লিখুন — এটি দিয়ে আপনার ওয়েবসাইট সেভ হবে"}
-              </p>
-            </div>
-          </div>
-        </div>
+        </header> 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
 
