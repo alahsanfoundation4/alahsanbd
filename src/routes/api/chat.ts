@@ -14,6 +14,10 @@ const Body = z.object({
           .regex(/^data:image\/(png|jpe?g|webp|gif);base64,/)
           .max(4_000_000)
           .optional(),
+        images: z
+          .array(z.string().regex(/^data:image\/(png|jpe?g|webp|gif);base64,/).max(2_500_000))
+          .max(5)
+          .optional(),
       })
     )
     .min(1)
@@ -69,6 +73,10 @@ const BASE_PROMPT = `তুমি "আল আহসান এআই" (Al Ahsan A
 - হেডারে Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), Hind Siliguri ও Inter ফন্ট (<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">), এবং tailwind.config দিয়ে বিষয়ের সাথে মানানসই একটি নিজস্ব ব্র্যান্ড রঙের প্যালেট সেট করবে।
 - ডিজাইন মান (Lovable/Stripe/Apple মানের): সাধারণ টেমপ্লেট নয়। বড় সাহসী টাইপোগ্রাফি, প্রচুর হোয়াইট স্পেস, gradient/glass ইফেক্ট, নরম shadow, rounded-2xl কার্ড, hover ও scroll-reveal অ্যানিমেশন (IntersectionObserver), sticky ন্যাভবার ও মোবাইল হ্যামবার্গার মেনু, ডার্ক/লাইট মোড টগল।
 - সেকশন: হিরো (শিরোনাম, সাবটাইটেল, CTA বাটন, ছবি), পরিসংখ্যান কাউন্টার, ফিচার/সার্ভিস গ্রিড, বিস্তারিত সেকশন, গ্যালারি, টেস্টিমোনিয়াল, FAQ অ্যাকর্ডিয়ন, যোগাযোগ ফর্ম (ভ্যালিডেশন ও সাফল্য বার্তা সহ), ফুটার। বিষয় অনুযায়ী প্রাসঙ্গিক সেকশন বাড়াবে।
+- গ্রাহকের তথ্য সর্বোচ্চ অগ্রাধিকার (কঠোর): গ্রাহক যে প্রতিষ্ঠানের নাম, ঠিকানা, ফোন, ইমেইল, পণ্য, দাম, ফি, সময়সূচি, রঙ বা নির্দেশ দেবেন — হুবহু সেটাই ব্যবহার করবে, কিছু বাদ দেবে না, পরিবর্তন করবে না। গ্রাহক যা দেননি সেই ফোন নম্বর, ঠিকানা বা ইমেইল কখনো বানাবে না; সেখানে "[আপনার ফোন নম্বর]" ধরনের স্পষ্ট ঘর রাখবে। আল-আহসান ফাউন্ডেশনের নাম/ডোমেইন গ্রাহকের সাইটে বসাবে না।
+- ব্যবসায়িক মডিউল (প্রাসঙ্গিক হলে সবগুলো, সম্পূর্ণ কার্যকর JS সহ): পণ্য/সেবা ক্যাটালগ ও রিয়েল অনলাইন অর্ডার কার্ট (যোগ/বাদ/পরিমাণ/মোট ৳, localStorage-এ সংরক্ষিত), চেকআউট ফর্ম ও বিকাশ/নগদ/রকেট/ক্যাশ অন ডেলিভারি পেমেন্ট সিমুলেটর (নম্বর ও TrxID ভ্যালিডেশন, অর্ডার নম্বরসহ কনফার্মেশন), স্কুল/মাদ্রাসা হলে ভর্তি বিজ্ঞপ্তি ও অনলাইন ভর্তি আবেদন ফর্ম, প্রচার/অফার সেকশন ও কাউন্টডাউন টাইমার, নোটিশ বোর্ড।
+- ডিফল্ট রঙ (গ্রাহক অন্য রঙ না বললে): স্কাই/ওশান ব্লু প্রাইমারি #0284c7 (হালকা #38bdf8, গাঢ় #0369a1), সাদা ও হালকা আইস-ব্লু (#f0f9ff) ব্যাকগ্রাউন্ড, গাঢ় নেভি লেখা (#0f172a), দুই-রঙা শিরোনাম (একটি অংশ নীল), পিল ব্যাজ, rounded নীল প্রাইমারি ও সাদা সেকেন্ডারি বাটন।
+- কঠোর নিষেধ: ন্যাভবারের উপরে কোনো ঘোষণা/জরুরি/হটলাইন টপ বার দেবে না; ভুয়া হটলাইন বা ০১৭০০-০০০০০০ ধরনের নকল নম্বর দেবে না।
 - কার্যকারিতা: সব বাটন, মেনু, ট্যাব, ফিল্টার, সার্চ, ফর্ম, মডাল জাভাস্ক্রিপ্টে সত্যিই কাজ করবে; প্রয়োজনে localStorage-এ ডেটা সংরক্ষণ করবে। কোনো ডামি বা অচল লিংক নয়।
 - ছবি: \`https://picsum.photos/seed/<প্রাসঙ্গিক-ইংরেজি-শব্দ>/1200/800\` ব্যবহার করবে (সবসময় লোড হয়); কল্পিত Unsplash ID ব্যবহার করবে না। প্রতিটি img-এ alt ও loading="lazy" দেবে।
 - মোবাইল-ফার্স্ট: ৩৬০px স্ক্রিনেও কোনো আনুভূমিক স্ক্রল থাকবে না।
@@ -182,15 +190,19 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        // Attach images
+        // Attach images (up to 5 per message)
+        const imgsOf = (i: number) => {
+          const m = parsed.data.messages[i];
+          return [...(m?.images ?? []), ...(m?.image ? [m.image] : [])].slice(0, 5);
+        };
         const msgs: { role: string; content: unknown }[] = textMsgs.map((m, i) => {
-          const img = parsed.data.messages[i]?.image;
-          if (m.role !== "user" || !img) return m;
-          return { role: m.role, content: [{ type: "text", text: m.content || "এই ছবিটি বিশ্লেষণ করুন।" }, { type: "image_url", image_url: { url: img } }] };
+          const imgs = imgsOf(i);
+          if (m.role !== "user" || !imgs.length) return m;
+          return { role: m.role, content: [{ type: "text", text: m.content || "এই ছবিগুলো বিশ্লেষণ করুন।" }, ...imgs.map((url) => ({ type: "image_url", image_url: { url } }))] };
         });
 
-        if (parsed.data.messages.some((m) => m.image))
-          system += "\n\nব্যবহারকারী ছবি পাঠিয়েছেন। ছবিটি মনোযোগ দিয়ে দেখে বিস্তারিত বর্ণনা, লেখা থাকলে হুবহু পাঠ (OCR) ও বিশ্লেষণ দাও।";
+        if (parsed.data.messages.some((_, i) => imgsOf(i).length))
+          system += "\n\nব্যবহারকারী এক বা একাধিক ছবি পাঠিয়েছেন। প্রতিটি ছবি মনোযোগ দিয়ে দেখে বিস্তারিত বর্ণনা, লেখা থাকলে হুবহু পাঠ (OCR) ও বিশ্লেষণ দাও। ওয়েবসাইট তৈরির অনুরোধ হলে ছবিগুলোকে ডিজাইন/তথ্যের রেফারেন্স হিসেবে মেনে চলবে এবং ছবিতে থাকা নাম, ঠিকানা, ফোন, পণ্য, দাম হুবহু ব্যবহার করবে।";
 
         if (s?.admin_note?.trim()) {
           system += `\n\n=== অ্যাডমিনের নির্দেশনা (সর্বোচ্চ অগ্রাধিকার — অবশ্যই মেনে চলবে) ===\n${s.admin_note.trim()}`;
@@ -218,7 +230,7 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const lastUser = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
-        const lastImg = parsed.data.messages[parsed.data.messages.length - 1]?.image;
+        const lastImg = imgsOf(parsed.data.messages.length - 1)[0];
         const stages: string[] = ["think"];
 
         // Image generation request

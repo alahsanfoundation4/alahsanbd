@@ -15,6 +15,13 @@
       "when": 1791602733706,
       "tag": "0001_create_fatwa_records",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791765724912,
+      "tag": "0002_custom_slug_and_chat_images",
+      "breakpoints": true
     }
   ]
 }
