@@ -697,7 +697,13 @@ function ChatPage() {
                 <div className={m.role === "user" ? "max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai min-w-0 max-w-full flex-1 break-words"}>
                   {m.role === "user" ? (
                     <>
-                      {m.image && <img src={m.image} alt="পাঠানো ছবি" className="mb-2 max-h-64 rounded-lg" />}
+                      {((m.images && m.images.length > 0) ? m.images : m.image ? [m.image] : []).length > 0 && (
+  <div className="mb-2 flex flex-wrap gap-2">
+    {((m.images && m.images.length > 0) ? m.images : [m.image!]).map((src, idx) => (
+      <img key={idx} src={src} alt={`ছবি ${idx + 1}`} className="max-h-40 rounded-lg border border-border object-cover" />
+    ))}
+  </div>
+)}
                       <p className="whitespace-pre-wrap">{m.content}</p>
                     </>
                   ) : (
