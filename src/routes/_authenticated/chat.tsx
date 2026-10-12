@@ -199,7 +199,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; image?: string; error?: boolean };
+type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean };
 type Conv = { id: string; title: string };
 
 function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean }) {
@@ -343,25 +343,35 @@ function ChatPage() {
   const [active, setActive] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [image, setImage] = useState<string | null>(null);
+    const [images, setImages] = useState<string[]>([]);
+  const [customSlug, setCustomSlug] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const pickImage = (file: File) => {
-    if (!file.type.startsWith("image/")) return alert("শুধু ছবি পাঠানো যাবে।");
-    const reader = new FileReader();
-    reader.onload = () => {
-      const im = new Image();
-      im.onload = () => {
-        const scale = Math.min(1, 1280 / Math.max(im.width, im.height));
-        const c = document.createElement("canvas");
-        c.width = Math.round(im.width * scale);
-        c.height = Math.round(im.height * scale);
-        c.getContext("2d")!.drawImage(im, 0, 0, c.width, c.height);
-        setImage(c.toDataURL("image/jpeg", 0.85));
+  const pickImages = (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return alert("শুধু ছবি ফাইল পাঠানো যাবে।");
+    if (images.length + files.length > 5) {
+      alert("সর্বোচ্চ ৫টি ছবি একসাথে পাঠানো যাবে।");
+    }
+    const remainingSlots = Math.max(0, 5 - images.length);
+    const toProcess = files.slice(0, remainingSlots);
+    toProcess.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const im = new Image();
+        im.onload = () => {
+          const scale = Math.min(1, 1280 / Math.max(im.width, im.height));
+          const c = document.createElement("canvas");
+          c.width = Math.round(im.width * scale);
+          c.height = Math.round(im.height * scale);
+          c.getContext("2d")!.drawImage(im, 0, 0, c.width, c.height);
+          const dataUrl = c.toDataURL("image/jpeg", 0.85);
+          setImages((prev) => (prev.length < 5 ? [...prev, dataUrl] : prev));
+        };
+        im.onerror = () => alert("ছবিটি খোলা যায়নি।");
+        im.src = String(reader.result);
       };
-      im.onerror = () => alert("ছবিটি খোলা যায়নি।");
-      im.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
   };
   const docRef = useRef<HTMLInputElement>(null);
   const [doc, setDoc] = useState<{ name: string; text: string } | null>(null);
@@ -455,17 +465,16 @@ function ChatPage() {
     recRef.current = rec;
     try { rec.start(); setListening(true); } catch { setListening(false); alert(KB_HELP); }
   };
-
-  const send = async () => {
-    const img = image;
+    const send = async () => {
+    const imgs = images;
     const d = doc;
-    const typed = input.trim() || (img ? "এই ছবিটি বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
+    const typed = input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
     // Show/store only a short label; the full file text goes to the AI for this message only
     const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
     const apiText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
     if (!typed || loading || docBusy) return;
     setInput("");
-    setImage(null);
+    setImages([]);
     setDoc(null);
     let convId = active;
     if (!convId) {
@@ -474,11 +483,12 @@ function ChatPage() {
       convId = data.id;
       setActive(convId);
     }
-    const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...(img ? { image: img } : {}) }];
-    setMsgs([...msgs, { role: "user", content: text, ...(img ? { image: img } : {}) }, { role: "assistant", content: "" }]);
+    const imgPayload = imgs.length ? { images: imgs, image: imgs[0] } : {};
+    const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
+    setMsgs([...msgs, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
-    await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: img ? `[ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
+    await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
 
     let full = "";
     let failed = false;
@@ -551,10 +561,14 @@ function ChatPage() {
         pushStage("build");
         try {
           const { data: s2 } = await supabase.auth.getSession();
-          const pr = await fetch("/api/pages", {
+                    const pr = await fetch("/api/pages", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${s2.session?.access_token}` },
-            body: JSON.stringify({ title: text.slice(0, 80), html: htmlCode.trim() }),
+            body: JSON.stringify({
+              title: text.slice(0, 80),
+              html: htmlCode.trim(),
+              slug: customSlug.trim() || undefined,
+            }),
           });
           if (pr.ok) {
             const { url } = await pr.json();
