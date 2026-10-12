@@ -746,20 +746,74 @@ function ChatPage() {
             <div ref={endRef} />
           </div>
         </div>
-
         <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4">
-        
-          {(doc || docBusy || image) && (
-            <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground">
-              {image && <span className="rounded-md border border-border px-2 py-1">ছবি সংযুক্ত <button onClick={() => setImage(null)} className="ml-1 text-destructive">x</button></span>}
+          {/* ইউআরএল দিন (কাস্টম স্লাগ) ফিল্ড */}
+          <div className="mx-auto mb-2 flex max-w-3xl items-center">
+            <div className="flex flex-1 items-center gap-1.5 rounded-xl border border-border/80 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground focus-within:border-primary/60 focus-within:bg-card">
+              <Globe size={14} className="shrink-0 text-primary" />
+              <span className="shrink-0 font-medium text-foreground">ইউআরএল দিন:</span>
+              <input
+                type="text"
+                value={customSlug}
+                onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                placeholder="যেমন: my-school বা fashion-shop (ঐচ্ছিক)"
+                className="w-full bg-transparent outline-none placeholder:text-muted-foreground/70"
+              />
+              {customSlug && (
+                <button
+                  type="button"
+                  onClick={() => setCustomSlug("")}
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  title="মুছুন"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* সংযুক্ত ছবি ও ফাইলের প্রিভিউ */}
+          {(doc || docBusy || images.length > 0) && (
+            <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {images.map((src, idx) => (
+                <div key={idx} className="relative inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1">
+                  <img src={src} alt={`ছবি ${idx + 1}`} className="h-6 w-6 rounded object-cover" />
+                  <span>ছবি {idx + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                    className="ml-1 text-destructive hover:font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
               {docBusy && <span>ফাইল পড়া হচ্ছে...</span>}
-              {doc && <span className="rounded-md border border-border px-2 py-1">{doc.name} ({doc.text.length} অক্ষর) <button onClick={() => setDoc(null)} className="ml-1 text-destructive">x</button></span>}
+              {doc && (
+                <span className="rounded-md border border-border bg-card px-2 py-1">
+                  {doc.name} ({doc.text.length} অক্ষর){" "}
+                  <button type="button" onClick={() => setDoc(null)} className="ml-1 text-destructive">
+                    ✕
+                  </button>
+                </span>
+              )}
             </div>
           )}
+
           <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-card p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImage(f); e.target.value = ""; }} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) pickImages(e.target.files);
+                e.target.value = "";
+              }}
+            />
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
-            <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন"><ImagePlus size={20} /></button>
+            <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)"><ImagePlus size={20} /></button>
             <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
             <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
               {listening ? <MicOff size={20} /> : <Mic size={20} />}
@@ -775,10 +829,10 @@ function ChatPage() {
             {loading ? (
               <button onClick={() => abortRef.current?.abort()} className="shrink-0 rounded-xl bg-secondary p-2 sm:p-3" aria-label="থামান"><Square size={20} /></button>
             ) : (
-              <button onClick={send} disabled={(!input.trim() && !image && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
+              <button onClick={send} disabled={(!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
             )}
           </div>
-        </div>
+        </div>   
       </main>
     </div>
   );
