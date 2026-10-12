@@ -229,6 +229,7 @@ export type Database = {
           html: string
           id: string
           num: number
+          slug: string | null
           title: string | null
           user_id: string
         }
@@ -237,6 +238,7 @@ export type Database = {
           html: string
           id?: string
           num?: never
+          slug?: string | null
           title?: string | null
           user_id: string
         }
@@ -245,6 +247,7 @@ export type Database = {
           html?: string
           id?: string
           num?: never
+          slug?: string | null
           title?: string | null
           user_id?: string
         }
