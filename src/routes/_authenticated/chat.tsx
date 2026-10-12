@@ -643,6 +643,35 @@ function ChatPage() {
           </div>
         )}
         <div className="space-y-1 border-t border-border p-3 text-sm">
+                  {/* ইউআরএল যোগ করুন */}
+          <div className="mb-2 rounded-xl border border-border/80 bg-card/60 p-2.5 text-xs">
+            <div className="mb-1 flex items-center justify-between font-medium text-foreground">
+              <span className="flex items-center gap-1.5 text-primary">
+                <Globe size={14} /> ইউআরএল যোগ করুন
+              </span>
+              {customSlug && (
+                <button
+                  type="button"
+                  onClick={() => setCustomSlug("")}
+                  className="text-[11px] text-destructive hover:underline"
+                >
+                  মুছুন
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={customSlug}
+              onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+              placeholder="যেমন: my-school (ঐচ্ছিক)"
+              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+            />
+            {customSlug && (
+              <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                লিংক: /{customSlug}
+              </p>
+            )}
+          </div>
           <Link to="/salat" className="flex items-center gap-2 rounded-lg px-3 py-2 text-primary hover:bg-primary/10">
             <Compass size={16} /> নামাজের সময়, কিবলা ও মসজিদ
           </Link>
