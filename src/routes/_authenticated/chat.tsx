@@ -51,16 +51,18 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
 
   const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
 
-  return (
-    <div className="not-prose my-3 py-1 animate-in fade-in duration-300">
-      <div className="inline-block text-sm font-semibold live-status-shimmer">
-        {cleanLabel}
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-        {bnNum(sec)} সেকেন্ড
-      </div>
-    </div>
-  );
+    return (
+          <div className="not-prose my-3.5 py-1 pl-1 animate-in fade-in duration-300">
+                <div className="inline-block text-base font-semibold live-status-shimmer tracking-normal">
+                        {cleanLabel}
+                              </div>
+                                    <div className="mt-1.5 text-sm text-muted-foreground tabular-nums">
+                                            {bnNum(sec)} সেকেন্ড
+                                                  </div>
+                                                      </div>
+                                                        );
+
+    )
 }
 
 // উত্তরের শেষে [[প্রশ্ন: ...]] আকারে ফলো-আপ প্রশ্ন থাকে — আলাদা করা
