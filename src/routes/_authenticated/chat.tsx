@@ -61,8 +61,7 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
                                                   </div>
                                                       </div>
                                                         );
-
-    )
+    
 }
 
 // উত্তরের শেষে [[প্রশ্ন: ...]] আকারে ফলো-আপ প্রশ্ন থাকে — আলাদা করা
