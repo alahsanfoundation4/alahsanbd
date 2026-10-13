@@ -28,10 +28,7 @@ const WAIT_HINTS = [
   { label: "উত্তরের কাঠামো তৈরি হচ্ছে", sub: "বিশদ ও সাবলীল উপস্থাপনা সাজানো হচ্ছে..." },
   { label: "চূড়ান্ত রূপ দেওয়া হচ্ছে", sub: "একটুখানি অপেক্ষা করুন..." },
 ];
-
 function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
-  const totalStages = Math.max(stages.length, 1);
-  const curStageKey = stages[Math.min(current, stages.length - 1)] ?? "think";
   const finished = current >= stages.length;
   const [sec, setSec] = useState(0);
 
@@ -41,93 +38,30 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
     return () => clearInterval(t);
   }, [finished]);
 
-  // পার্সেন্টেজ হিসাব (কতটুকু হলো ও কতটুকু বাকি)
-  const currentStepNum = finished ? totalStages : Math.min(current + 1, totalStages);
-  const rawPercent = finished
-    ? 100
-    : Math.min(95, Math.max(15, Math.round((currentStepNum / (totalStages + 1)) * 100) + Math.min(sec * 3, 15)));
+  if (finished) return null;
 
-  const fallback = { label: curStageKey, sub: "প্রসেসিং চলছে...", icon: "sparkles" };
-  const rawInfo: { label: string; sub: string; icon?: string } | undefined = finished
-    ? STAGE_CONFIG["done"]
-    : curStageKey === "think" && sec >= 4
-    ? WAIT_HINTS[Math.min(Math.floor((sec - 4) / 4), WAIT_HINTS.length - 1)]
-    : STAGE_CONFIG[curStageKey];
-  const info = { ...fallback, ...(rawInfo ?? {}), icon: rawInfo?.icon ?? (curStageKey === "think" ? "brain" : "sparkles") };
+  const curStageKey = stages[Math.min(current, stages.length - 1)] ?? "think";
+  const rawInfo: { label: string; sub: string; icon?: string } | undefined =
+    curStageKey === "think" && sec >= 4
+      ? WAIT_HINTS[Math.min(Math.floor((sec - 4) / 4), WAIT_HINTS.length - 1)]
+      : STAGE_CONFIG[curStageKey];
+
+  const label = rawInfo?.label || "আপনার প্রশ্ন বিশ্লেষণ করা হচ্ছে";
+  const cleanLabel = label.replace(/\.+$/, "").trim();
 
   const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
 
-
   return (
-    <div className="not-prose my-3.5 overflow-hidden rounded-xl border border-border bg-card p-3.5 shadow-sm animate-in fade-in duration-300">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            {finished ? <CheckCircle2 size={16} className="text-primary" /> : <Loader2 size={16} className="text-primary animate-spin" />}
-          </div>
-          <div className="min-w-0">
-            <span className={`block truncate text-sm font-semibold ${finished ? "text-foreground" : "live-status-shimmer"}`}>
-              {info.label}
-            </span>
-            <p className="truncate text-xs text-muted-foreground mt-0.5">
-              {info.sub}
-            </p>
-          </div>
-        </div>
-
-        {/* কতটুকু কাজ হলো ও সময় */}
-        <div className="shrink-0 text-right">
-          <div className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
-            <span>{bnNum(rawPercent)}%</span>
-          </div>
-          {!finished && sec > 0 && (
-            <span className="block text-[11px] text-muted-foreground mt-1">
-              {bnNum(sec)} সেকেন্ড
-            </span>
-          )}
-        </div>
+    <div className="not-prose my-3 py-1 animate-in fade-in duration-300">
+      <div className="inline-block text-sm font-semibold live-status-shimmer">
+        {cleanLabel}
       </div>
-
-      {/* প্রোগ্রেস বার (চকচক অ্যানিমেশন ও লাইভ ফিল সহ) */}
-      <div className="relative mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className={`relative h-full overflow-hidden rounded-full bg-primary transition-all duration-700 ease-out ${finished ? "" : "live-bar-glow"}`}
-          style={{ width: `${rawPercent}%` }}
-        >
-          {!finished && <div className="live-bar-shimmer absolute inset-0" />}
-        </div>
-      </div>
-
-      {/* নিচের ধাপসমূহ (কতটুকু শেষ আর কতটুকু বাকি) */}
-      <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
-        <span>
-          ধাপ: <b className="text-foreground">{bnNum(currentStepNum)}</b> / {bnNum(totalStages)}
-          {finished ? " (সম্পন্ন)" : ` (বাকি ${bnNum(Math.max(0, 100 - rawPercent))}%)`}
-        </span>
-        <div className="flex items-center gap-1.5 overflow-hidden text-right">
-          {stages.map((st, idx) => {
-            const isDone = idx < current || finished;
-            const isCurrent = idx === current && !finished;
-            return (
-              <span
-                key={st + idx}
-                className={`inline-block h-1.5 rounded-full transition-all ${
-                  isDone
-                    ? "w-4 bg-primary"
-                    : isCurrent
-                    ? "w-6 bg-primary/60"
-                    : "w-2 bg-muted-foreground/30"
-                }`}
-                title={STAGE_CONFIG[st]?.label ?? st}
-              />
-            );
-          })}
-        </div>
+      <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+        {bnNum(sec)} সেকেন্ড
       </div>
     </div>
   );
 }
-
 
 // উত্তরের শেষে [[প্রশ্ন: ...]] আকারে ফলো-আপ প্রশ্ন থাকে — আলাদা করা
 function splitFollowups(t: string): { body: string; followups: string[] } {
