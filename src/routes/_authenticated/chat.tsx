@@ -698,7 +698,7 @@ function ChatPage() {
                         </>
                         );
                       })() : (
-                        <span className="typing"><i /><i /><i /></span>
+                      null
                       )}
                     </>
                   )}
