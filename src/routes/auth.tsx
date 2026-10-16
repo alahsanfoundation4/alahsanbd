@@ -54,6 +54,15 @@ function AuthPage() {
     }
   }
 
+  async function forgot() {
+    if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) toast.error(error.message);
+    else toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে।");
+  }
+
   async function google() {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) toast.error("Google লগইন ব্যর্থ হয়েছে।");
@@ -91,6 +100,15 @@ function AuthPage() {
                 {busy ? "অপেক্ষা করুন…" : mode === "in" ? "লগইন" : "সাইন আপ"}
               </Button>
             </form>
+            {mode === "in" && (
+              <button
+                type="button"
+                className="mt-3 w-full text-center text-sm text-muted-foreground hover:underline"
+                onClick={forgot}
+              >
+                পাসওয়ার্ড ভুলে গেছেন?
+              </button>
+            )}
             <button
               type="button"
               className="mt-4 w-full text-center text-sm text-primary underline-offset-4 hover:underline"
