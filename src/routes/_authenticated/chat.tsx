@@ -418,7 +418,7 @@ function ChatPage() {
       convId = data.id;
       setActive(convId);
     }
-    const imgPayload = imgs.length ? { images: imgs, image: imgs[0] } : {};
+    const imgPayload: Partial<Pick<Msg, "images" | "image">> = imgs[0] ? { images: imgs, image: imgs[0] } : {};
     const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
     setMsgs([...msgs, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
