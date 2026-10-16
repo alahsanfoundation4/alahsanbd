@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil, Pin, PinOff, Archive, ArchiveRestore } from "lucide-react";
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 
