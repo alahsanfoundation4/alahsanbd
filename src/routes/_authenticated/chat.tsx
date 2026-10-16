@@ -431,7 +431,7 @@ function ChatPage() {
     recRef.current = rec;
     try { rec.start(); setListening(true); } catch { setListening(false); alert(KB_HELP); }
   };
-    const send = async (override?: string, base?: Msg[]) => {
+    const send = async (override?: string, base?: Msg[], regen = false) => {
     const cur = base ?? msgs;
     const imgs = override !== undefined ? [] : images;
     const d = override !== undefined ? null : doc;
@@ -459,7 +459,13 @@ function ChatPage() {
     setMsgs([...cur, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
-    await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
+    if (regen) {
+      // Regenerate: the question is already saved; drop the old saved answer instead of duplicating the question
+      const { data: last } = await supabase.from("messages").select("id,role").eq("conversation_id", convId).order("created_at", { ascending: false }).limit(1);
+      if (last?.[0]?.role === "assistant") await supabase.from("messages").delete().eq("id", last[0].id);
+    } else {
+      await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
+    }
 
     let full = "";
     let failed = false;
@@ -738,7 +744,7 @@ function ChatPage() {
                             <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
                             {!streamingNow && <>
                               {i === msgs.length - 1 && i > 0 && msgs[i - 1]?.role === "user" && !loading && (
-                                <button onClick={() => { const prev = msgs[i - 1]!; send(prev.content, msgs.slice(0, i - 1)); }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="আবার লিখুন"><RotateCcw size={14} /> আবার লিখুন</button>
+                                <button onClick={() => { const prev = msgs[i - 1]!; send(prev.content, msgs.slice(0, i - 1), true); }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="আবার লিখুন"><RotateCcw size={14} /> আবার লিখুন</button>
                               )}
                               <button onClick={() => exportAnswer(body, "pdf")} className="text-xs hover:text-primary">PDF</button>
                               <button onClick={() => exportAnswer(body, "doc")} className="text-xs hover:text-primary">Word</button>
