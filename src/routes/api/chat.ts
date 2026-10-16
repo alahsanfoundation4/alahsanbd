@@ -325,7 +325,7 @@ async function handleChat(request: Request): Promise<Response> {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
           // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
           const ac = new AbortController();
-          const timer = setTimeout(() => ac.abort(), attempts.length > 1 ? 20000 : 45000);
+          const timer = setTimeout(() => ac.abort(), isQuick ? 12000 : attempts.length > 1 ? 20000 : 45000);
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
