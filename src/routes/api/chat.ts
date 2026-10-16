@@ -181,7 +181,8 @@ async function handleChat(request: Request): Promise<Response> {
         const picked = provider === "lovable" && parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
         // দ্রুত পথ: সাধারণ প্রশ্নে দ্রুততম মডেল (Google কী না থাকলেও বিল্ট-ইন দিয়ে)
         const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
-        const isQuick = !picked && (provider === "lovable" || googleNoKey) && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
+        void googleNoKey;
+        const isQuick = !picked && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|অংক|গণিত/i.test(lastText);
         let model = picked ?? (isQuick ? "google/gemini-3-flash-preview" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
           : baseModel);
@@ -197,7 +198,12 @@ async function handleChat(request: Request): Promise<Response> {
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
         // নির্বাচিত সেবার কী না থাকলে বিল্ট-ইন এআই দিয়ে উত্তর (চ্যাট বন্ধ হয়ে যায় না)
-        if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
+        // দ্রুত পথ: সাধারণ প্রশ্নে সবসময় দ্রুততম বিল্ট-ইন পথ (Google-এর ভিড়/503-এ আটকে না থেকে)
+        if (isQuick && process.env["LOVABLE_API_KEY"]) {
+          url = "https://ai.gateway.lovable.dev/v1/chat/completions";
+          key = process.env["LOVABLE_API_KEY"];
+          model = "google/gemini-3-flash-preview";
+        } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
           model = model.includes("/") ? model : provider === "google" ? `google/${model}` : DEFAULT_MODELS.lovable;
