@@ -514,7 +514,8 @@ function ChatPage() {
       const { data: last } = await supabase.from("messages").select("id,role").eq("conversation_id", convId).order("created_at", { ascending: false }).limit(1);
       if (last?.[0]?.role === "assistant") await supabase.from("messages").delete().eq("id", last[0].id);
     } else {
-      await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
+      // অপেক্ষা ছাড়াই পেছনে সেভ — উত্তর সঙ্গে সঙ্গে শুরু হয়
+      void supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id }).then(({ error }) => { if (error) console.error("save user msg", error.message); });
     }
 
     let full = "";
