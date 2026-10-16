@@ -60,6 +60,36 @@ function Landing() {
     ["ইসলামি উত্তর কতটা নির্ভরযোগ্য?", "এআই সূত্রসহ উত্তর দেওয়ার চেষ্টা করে, তবে গুরুত্বপূর্ণ মাসআলায় অবশ্যই একজন বিজ্ঞ আলেমের পরামর্শ নিন।"],
   ];
 
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [mode, setMode] = useState<"in" | "up">("in");
+  const [info, setInfo] = useState("");
+  const emailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setErr(""); setInfo("");
+    if (mode === "in") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      setBusy(false);
+      if (error) setErr("ইমেইল বা পাসওয়ার্ড ভুল, অথবা ইমেইল এখনো নিশ্চিত করা হয়নি।");
+      else navigate({ to: "/chat" });
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin } });
+      setBusy(false);
+      if (error) setErr(error.message);
+      else setInfo("আপনার ইমেইলে নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে চাপ দিয়ে তারপর প্রবেশ করুন।");
+    }
+  };
+  const emailForm = (
+    <form onSubmit={emailAuth} className="mt-4 flex w-full max-w-sm flex-col gap-2 text-left">
+      <div className="text-center text-xs text-muted-foreground">অথবা ইমেইল দিয়ে</div>
+      <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ইমেইল" className="rounded-xl bg-card px-4 py-2.5 text-sm outline-none ring-1 ring-border focus:ring-primary" />
+      <input type="password" required minLength={6} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" className="rounded-xl bg-card px-4 py-2.5 text-sm outline-none ring-1 ring-border focus:ring-primary" />
+      <button type="submit" disabled={busy} className="rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{mode === "in" ? "প্রবেশ করুন" : "নতুন অ্যাকাউন্ট খুলুন"}</button>
+      <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="text-center text-xs text-primary">{mode === "in" ? "অ্যাকাউন্ট নেই? নতুন খুলুন" : "আগেই অ্যাকাউন্ট আছে? প্রবেশ করুন"}</button>
+      {info && <p className="text-center text-xs text-primary">{info}</p>}
+    </form>
+  );
+
   const cta = (
     <button
       onClick={signIn}
