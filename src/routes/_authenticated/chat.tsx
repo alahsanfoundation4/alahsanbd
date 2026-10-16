@@ -124,6 +124,7 @@ import { Settings as SettingsIcon, Camera, MonitorUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
+import { LiveCamera } from "@/components/LiveCamera";
 import { useIsAdmin } from "@/lib/admin";
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -369,6 +370,8 @@ function ChatPage() {
   useEffect(() => { siteSlugRef.current = customSlug.trim() || (active ? `site-${String(active).slice(0, 8)}` : ""); }, [customSlug, active]);
   const [listening, setListening] = useState(false);
   const [sidebar, setSidebar] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [camOpen, setCamOpen] = useState(false);
   const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
   const [speaking, setSpeaking] = useState<number | null>(null);
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
@@ -868,13 +871,25 @@ function ChatPage() {
               }}
             />
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
-            <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)"><ImagePlus size={20} /></button>
-            <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
-            <button onClick={() => captureFrame("camera")} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ক্যামেরা দিয়ে ছবি তুলে দেখান" title="ক্যামেরা"><Camera size={20} /></button>
-            <button onClick={() => captureFrame("screen")} className="hidden shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:block sm:p-3" aria-label="স্ক্রিন দেখান" title="স্ক্রিন"><MonitorUp size={20} /></button>
-            <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
-              {listening ? <MicOff size={20} /> : <Mic size={20} />}
-            </button>
+            <Popover open={plusOpen} onOpenChange={setPlusOpen}>
+              <PopoverTrigger asChild>
+                <button className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="আরও অপশন"><Plus size={22} /></button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-56 p-1">
+                {[
+                  { icon: <Camera size={18} />, label: "সরাসরি ক্যামেরা", run: () => setCamOpen(true) },
+                  { icon: <ImagePlus size={18} />, label: "ছবি যুক্ত করুন", run: () => fileRef.current?.click() },
+                  { icon: <Paperclip size={18} />, label: "PDF / ফাইল", run: () => docRef.current?.click() },
+                  { icon: listening ? <MicOff size={18} /> : <Mic size={18} />, label: listening ? "ভয়েস থামান" : "ভয়েসে বলুন", run: toggleMic },
+                  { icon: <MonitorUp size={18} />, label: "স্ক্রিন দেখান", run: () => captureFrame("screen") },
+                ].map((o) => (
+                  <button key={o.label} onClick={() => { setPlusOpen(false); o.run(); }} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-secondary">
+                    <span className="text-primary">{o.icon}</span>{o.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+            {camOpen && <LiveCamera onClose={() => setCamOpen(false)} onCapture={(url) => { setImages((prev) => (prev.length < 5 ? [...prev, url] : prev)); if (!input.trim()) setInput("ক্যামেরায় কী দেখা যাচ্ছে, বিশ্লেষণ করুন।"); }} />}
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
