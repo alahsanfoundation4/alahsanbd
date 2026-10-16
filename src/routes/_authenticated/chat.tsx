@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2 } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun } from "lucide-react";
 import { extractDocText, loadBookmarks, saveBookmarks, downloadShareCard, type Bookmark } from "@/lib/extras";
 import { ChartBlock } from "@/components/ChartBlock";
 
@@ -137,9 +137,21 @@ export const Route = createFileRoute("/_authenticated/chat")({
 type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean };
 type Conv = { id: string; title: string };
 
+// বর্তমান চ্যাটের সাইট-ঠিকানা (আগের ভার্সন একই লিংকে ফিরিয়ে আনার জন্য)
+const siteSlugRef = { current: "" };
+
 function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean }) {
   const [tab, setTab] = useState<"run" | "code">("run");
   const [ok, setOk] = useState(false);
+  const [restore, setRestore] = useState<"" | "busy" | "done" | "err">("");
+  const restoreVersion = async () => {
+    if (!siteSlugRef.current) return;
+    setRestore("busy");
+    const { data: s } = await supabase.auth.getSession();
+    const r = await fetch("/api/pages", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` }, body: JSON.stringify({ title: "পুনরুদ্ধার করা ভার্সন", html: code.trim(), slug: siteSlugRef.current }) }).catch(() => null);
+    setRestore(r?.ok ? "done" : "err");
+    setTimeout(() => setRestore(""), 2500);
+  };
   if (streaming) {
     return (
       <div className="not-prose my-3 overflow-hidden rounded-xl border border-border bg-card">
@@ -161,6 +173,7 @@ function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean })
         <button onClick={async () => { await navigator.clipboard.writeText(code); setOk(true); setTimeout(() => setOk(false), 1500); }} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary">{ok ? <Check size={14} /> : <Copy size={14} />} কপি</button>
         <button onClick={openFull} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary"><Maximize2 size={14} /> বড় করে</button>
         <button onClick={async () => { const JSZip = (await import("jszip")).default; const z = new JSZip(); z.file("index.html", code); z.file("README.txt", "index.html ফাইলটি ব্রাউজারে খুলুন। তৈরি করেছে: আল আহসান এআই"); const b = await z.generateAsync({ type: "blob" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "website.zip"; a.click(); }} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary"><Download size={14} /> ZIP</button>
+        <button onClick={restoreVersion} disabled={restore === "busy"} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary" title="এই ভার্সনটি লাইভ লিংকে বসান">{restore === "done" ? <><Check size={14} /> লাইভ হয়েছে</> : restore === "err" ? "ব্যর্থ" : restore === "busy" ? <Loader2 size={14} className="animate-spin" /> : <><Globe size={14} /> এই ভার্সন লাইভ করুন</>}</button>
       </div>
       {tab === "run" ? (
         <iframe title="ওয়েবসাইট প্রিভিউ" srcDoc={withStorageShim(code)} sandbox="allow-scripts allow-forms allow-modals allow-popups" className="h-[70vh] min-h-[520px] w-full bg-white sm:h-[80vh] sm:min-h-[650px]" />
@@ -334,6 +347,10 @@ function ChatPage() {
   const [flow, setFlow] = useState<{ stages: string[]; current: number } | null>(null);
   const pushStage = (st: string, finish = false) => setFlow((f) => { const stages = f ? (f.stages.includes(st) ? f.stages : [...f.stages, st]) : [st]; return { stages, current: finish ? stages.length : stages.indexOf(st) }; });
   const [voiceOut, setVoiceOut] = useState(false);
+  const [dark, setDark] = useState(false);
+  useEffect(() => { const d = localStorage.getItem("theme") === "dark"; setDark(d); document.documentElement.classList.toggle("dark", d); }, []);
+  const toggleDark = () => { const d = !dark; setDark(d); document.documentElement.classList.toggle("dark", d); localStorage.setItem("theme", d ? "dark" : "light"); };
+  useEffect(() => { siteSlugRef.current = customSlug.trim() || (active ? `site-${String(active).slice(0, 8)}` : ""); }, [customSlug, active]);
   const [listening, setListening] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
@@ -506,7 +523,7 @@ function ChatPage() {
             body: JSON.stringify({
               title: text.slice(0, 80),
               html: htmlCode.trim(),
-              slug: customSlug.trim() || `site-${convId.slice(0, 8)}`,
+              slug: (siteSlugRef.current = customSlug.trim() || `site-${convId.slice(0, 8)}`),
             }),
           });
           if (pr.ok) {
@@ -636,6 +653,7 @@ function ChatPage() {
             <button onClick={() => printChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="প্রিন্ট / PDF" title="প্রিন্ট / PDF"><Printer size={16} /></button>
             <button onClick={() => downloadChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডাউনলোড" title="ডাউনলোড"><Download size={16} /></button>
           </>)}
+          <button onClick={toggleDark} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডার্ক মোড" title="ডার্ক / লাইট মোড">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
           <button
             onClick={() => { setVoiceOut(!voiceOut); window.speechSynthesis?.cancel(); }}
             className={`flex items-center gap-1 rounded-full border px-3 py-1 text-sm ${voiceOut ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
