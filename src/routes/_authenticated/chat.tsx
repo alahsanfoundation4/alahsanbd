@@ -656,7 +656,8 @@ function ChatPage() {
               </div>
             )}
             {msgs.map((m, i) => (
-              <div key={i} className={`mb-5 flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`mb-5 flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" && <div className="mt-0.5 shrink-0 overflow-hidden rounded-full"><Logo size={30} /></div>}
                 <div className={m.role === "user" ? "max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai min-w-0 max-w-full flex-1 break-words"}>
                   {m.role === "user" ? (
                     <>
