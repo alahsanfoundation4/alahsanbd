@@ -117,7 +117,17 @@ const INTEGRITY = `\n\n## সততা ও যাচাই প্রোটোক
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
-      POST: async ({ request }) => {
+      POST: async (ctx) => {
+        try { return await handleChat(ctx.request); } catch (e) {
+          console.error("chat failed", e);
+          return new Response("উত্তর তৈরি করা যায়নি। একটু পরে আবার চেষ্টা করুন।", { status: 503 });
+        }
+      },
+    },
+  },
+});
+
+async function handleChat(request: Request): Promise<Response> {
         const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
         const pub = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
@@ -184,7 +194,7 @@ export const Route = createFileRoute("/api/chat")({
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
-        if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 500 });
+        if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
@@ -337,16 +347,13 @@ export const Route = createFileRoute("/api/chat")({
 
         if (!res.ok || !res.body) {
           const err = realErr ?? { status: res.status, text: await res.text().catch(() => "") };
-          return new Response(friendlyError(err.status, err.text), { status: err.status || 500 });
+          return new Response(friendlyError(err.status, err.text), { status: err.status >= 500 || !err.status ? 502 : err.status });
         }
 
         if (realErr) stages.push("fallback");
         stages.push("write");
         return withStages(stages, res.body);
-      },
-    },
-  },
-});
+}
 
 function pick(a: string[]): string {
   return a[Math.floor(Math.random() * a.length)] ?? a[0] ?? "";
@@ -433,20 +440,30 @@ const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
 const SSE_HEADERS = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" };
 
 function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Response {
+  const r = upstream.getReader();
+  let closed = false;
+  // ব্যবহারকারী পাতা বন্ধ/থামালে আর লিখতে গেলে "aborted" ক্র্যাশ হতো — নিরাপদ লেখা
+  const push = (c: ReadableStreamDefaultController<Uint8Array>, v: Uint8Array) => {
+    if (closed) return;
+    try { c.enqueue(v); } catch { closed = true; }
+  };
   const body = new ReadableStream<Uint8Array>({
     async start(c) {
-      for (const st of stages) c.enqueue(sse({ stage: st }));
-      const r = upstream.getReader();
+      for (const st of stages) push(c, sse({ stage: st }));
       try {
-        while (true) {
+        while (!closed) {
           const { done, value } = await r.read();
           if (done) break;
-          c.enqueue(value);
+          push(c, value);
         }
-      } catch (e) {
-        c.enqueue(sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
+      } catch {
+        push(c, sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
       }
-      c.close();
+      if (!closed) { closed = true; try { c.close(); } catch { /* already closed */ } }
+    },
+    cancel() {
+      closed = true;
+      r.cancel().catch(() => {});
     },
   });
   return new Response(body, { headers: SSE_HEADERS });
@@ -455,12 +472,12 @@ function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Res
 function stageStream(stages: string[], work: () => Promise<string>): Response {
   const body = new ReadableStream<Uint8Array>({
     async start(c) {
-      for (const st of stages) c.enqueue(sse({ stage: st }));
+      const push = (v: Uint8Array) => { try { c.enqueue(v); return true; } catch { return false; } };
+      for (const st of stages) push(sse({ stage: st }));
       let text = "";
       try { text = await work(); } catch { text = "কাজটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।"; }
-      c.enqueue(sse({ choices: [{ delta: { content: text } }] }));
-      c.enqueue(enc.encode("data: [DONE]\n\n"));
-      c.close();
+      if (push(sse({ choices: [{ delta: { content: text } }] }))) push(enc.encode("data: [DONE]\n\n"));
+      try { c.close(); } catch { /* client already left */ }
     },
   });
   return new Response(body, { headers: SSE_HEADERS });
