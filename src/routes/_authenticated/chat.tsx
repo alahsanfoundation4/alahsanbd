@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil, Pin, PinOff, Archive, ArchiveRestore } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil, Pin, PinOff, Archive, ArchiveRestore, RotateCcw } from "lucide-react";
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 
@@ -431,10 +431,11 @@ function ChatPage() {
     recRef.current = rec;
     try { rec.start(); setListening(true); } catch { setListening(false); alert(KB_HELP); }
   };
-    const send = async () => {
-    const imgs = images;
-    const d = doc;
-    const typed = input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
+    const send = async (override?: string, base?: Msg[]) => {
+    const cur = base ?? msgs;
+    const imgs = override !== undefined ? [] : images;
+    const d = override !== undefined ? null : doc;
+    const typed = override !== undefined ? override.trim() : input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
     // Show/store only a short label; the full file text goes to the AI for this message only
     const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
     const apiText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
@@ -450,12 +451,12 @@ function ChatPage() {
       setActive(convId);
     }
     const imgPayload: Partial<Pick<Msg, "images" | "image">> = imgs[0] ? { images: imgs, image: imgs[0] } : {};
-    const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
+    const history: Msg[] = [...cur.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
     // ভার্সন সিস্টেম: এই চ্যাটে আগের ওয়েবসাইট থাকলে সেটিকেই ভিত্তি ধরে শুধু চাওয়া পরিবর্তন
-    const siteMsgs = msgs.filter((m) => m.role === "assistant" && /```html/i.test(m.content));
+    const siteMsgs = cur.filter((m) => m.role === "assistant" && /```html/i.test(m.content));
     const prevSite = siteMsgs.length ? [...siteMsgs[siteMsgs.length - 1]!.content.matchAll(/```html\s*\n([\s\S]*?)```/gi)].map((x) => x[1]).join("\n") : "";
     const siteVersion = siteMsgs.length + 1;
-    setMsgs([...msgs, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
+    setMsgs([...cur, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
     await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: imgs.length ? `[${imgs.length}টি ছবি সংযুক্ত] ${text}` : text, user_id: user.id });
@@ -716,6 +717,12 @@ function ChatPage() {
   </div>
 )}
                       <p className="whitespace-pre-wrap">{m.content}</p>
+                      {!loading && (
+                        <div className="mt-1 flex justify-end gap-3 text-xs text-primary-foreground/80">
+                          <button onClick={() => copy(m.content, i)} className="flex items-center gap-1 hover:text-primary-foreground" aria-label="কপি">{copied === i ? <Check size={13} /> : <Copy size={13} />}</button>
+                          <button onClick={() => setInput(m.content.replace(/\n\n\[সংযুক্ত ফাইল: [^\]]*\]$/, ""))} className="flex items-center gap-1 hover:text-primary-foreground" aria-label="এডিট"><Pencil size={13} /> এডিট</button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -730,6 +737,9 @@ function ChatPage() {
                             <button onClick={() => copy(body, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
                             <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
                             {!streamingNow && <>
+                              {i === msgs.length - 1 && i > 0 && msgs[i - 1]?.role === "user" && !loading && (
+                                <button onClick={() => { const prev = msgs[i - 1]!; send(prev.content, msgs.slice(0, i - 1)); }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="আবার লিখুন"><RotateCcw size={14} /> আবার লিখুন</button>
+                              )}
                               <button onClick={() => exportAnswer(body, "pdf")} className="text-xs hover:text-primary">PDF</button>
                               <button onClick={() => exportAnswer(body, "doc")} className="text-xs hover:text-primary">Word</button>
                               <button onClick={() => exportAnswer(body, "md")} className="text-xs hover:text-primary">Markdown</button>
@@ -815,7 +825,7 @@ function ChatPage() {
             {loading ? (
               <button onClick={() => abortRef.current?.abort()} className="shrink-0 rounded-xl bg-secondary p-2 sm:p-3" aria-label="থামান"><Square size={20} /></button>
             ) : (
-              <button onClick={send} disabled={(!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
+              <button onClick={() => send()} disabled={(!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
             )}
           </div>
         </div>   
