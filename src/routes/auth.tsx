@@ -54,6 +54,28 @@ function AuthPage() {
     }
   }
 
+  async function magicLink() {
+    if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/chat`, shouldCreateUser: true },
+    });
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else { setSent(true); toast.success("লগইন লিংক আপনার ইমেইলে পাঠানো হয়েছে।"); }
+  }
+
+  async function resend() {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) await magicLink();
+    else toast.success("লিংক আবার পাঠানো হয়েছে।");
+  }
+
   async function forgot() {
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -78,9 +100,15 @@ function AuthPage() {
           {mode === "in" ? "আপনার অ্যাকাউন্টে প্রবেশ করুন" : "নতুন অ্যাকাউন্ট তৈরি করুন"}
         </p>
         {sent ? (
-          <p className="mt-6 rounded-lg bg-accent p-4 text-sm text-accent-foreground">
-            আপনার ইমেইলে একটি নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে ক্লিক করে তারপর লগইন করুন।
-          </p>
+          <div className="mt-6 space-y-3">
+            <p className="rounded-lg bg-accent p-4 text-sm text-accent-foreground">
+              {email} ঠিকানায় একটি লিংক পাঠানো হয়েছে। লিংকে ক্লিক করলেই লগইন হয়ে যাবে। ইনবক্সে না পেলে Spam ফোল্ডার দেখুন।
+            </p>
+            <Button variant="outline" className="w-full" onClick={resend}>লিংক আবার পাঠান</Button>
+            <button type="button" className="w-full text-center text-sm text-muted-foreground hover:underline" onClick={() => setSent(false)}>
+              অন্য ইমেইল ব্যবহার করুন
+            </button>
+          </div>
         ) : (
           <>
             <Button variant="outline" className="mt-6 w-full" onClick={google}>
@@ -100,6 +128,9 @@ function AuthPage() {
                 {busy ? "অপেক্ষা করুন…" : mode === "in" ? "লগইন" : "সাইন আপ"}
               </Button>
             </form>
+            <Button type="button" variant="secondary" className="mt-3 w-full" disabled={busy} onClick={magicLink}>
+              পাসওয়ার্ড ছাড়া ইমেইলে লগইন লিংক পান
+            </Button>
             {mode === "in" && (
               <button
                 type="button"
