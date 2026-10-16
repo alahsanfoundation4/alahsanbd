@@ -433,20 +433,30 @@ const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
 const SSE_HEADERS = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" };
 
 function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Response {
+  const r = upstream.getReader();
+  let closed = false;
+  // ব্যবহারকারী পাতা বন্ধ/থামালে আর লিখতে গেলে "aborted" ক্র্যাশ হতো — নিরাপদ লেখা
+  const push = (c: ReadableStreamDefaultController<Uint8Array>, v: Uint8Array) => {
+    if (closed) return;
+    try { c.enqueue(v); } catch { closed = true; }
+  };
   const body = new ReadableStream<Uint8Array>({
     async start(c) {
-      for (const st of stages) c.enqueue(sse({ stage: st }));
-      const r = upstream.getReader();
+      for (const st of stages) push(c, sse({ stage: st }));
       try {
-        while (true) {
+        while (!closed) {
           const { done, value } = await r.read();
           if (done) break;
-          c.enqueue(value);
+          push(c, value);
         }
-      } catch (e) {
-        c.enqueue(sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
+      } catch {
+        push(c, sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
       }
-      c.close();
+      if (!closed) { closed = true; try { c.close(); } catch { /* already closed */ } }
+    },
+    cancel() {
+      closed = true;
+      r.cancel().catch(() => {});
     },
   });
   return new Response(body, { headers: SSE_HEADERS });
