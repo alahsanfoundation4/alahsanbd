@@ -137,6 +137,7 @@ function Landing() {
             জ্ঞান, লেখা, অনুবাদ, গবেষণা ও প্রোগ্রামিং — সব কাজে আপনার শক্তিশালী বাংলা সহকারী। লিখে বা কথা বলে প্রশ্ন করুন।
           </p>
           <div className="mt-7 sm:mt-10">{cta}</div>
+          {emailForm}
           {err && <p className="mt-4 text-destructive">{err}</p>}
         </div>
       </section>
