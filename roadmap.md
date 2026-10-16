@@ -8,4 +8,7 @@
 - [ ] Phase 8–9: voice / live
 - [x] Phase 10–12: study / writing / coding mode picker
 - [ ] Phase 13–15: builders, workspace
-- [ ] Phase 16–22: search, settings, admin, security, performance, testing
+- [x] Phase 16: web search (already existed, audited)
+- [x] Phase 17/35: /profile page — account info, memories view/delete, delete all chats
+- [x] Phase 18: admin panel (already existed)
+- [ ] Phase 19–22: security, performance, mobile, regression

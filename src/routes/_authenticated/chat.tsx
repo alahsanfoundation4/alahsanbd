@@ -680,7 +680,7 @@ function ChatPage() {
               <Shield size={16} /> অ্যাডমিন প্যানেল
             </Link>
           )}
-          <div className="truncate px-3 text-xs text-muted-foreground">{user.email}</div>
+          <Link to="/profile" className="block truncate rounded-lg px-3 py-1 text-xs text-muted-foreground hover:text-primary">{user.email} — আমার প্রোফাইল</Link>
           <button onClick={signOut} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-sidebar-accent">
             <LogOut size={16} /> বের হোন
           </button>
