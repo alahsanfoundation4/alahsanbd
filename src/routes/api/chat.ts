@@ -338,7 +338,7 @@ async function handleChat(request: Request): Promise<Response> {
         }
 
         if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
-          const first = `${provider}/${model}`.replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
+          const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
           const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
           for (const gwModel of chain) {
             const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
