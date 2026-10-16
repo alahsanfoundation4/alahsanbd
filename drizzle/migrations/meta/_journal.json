@@ -1,27 +1,5 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1791346172135,
-      "tag": "0000_admin_insert_settings_policies",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1791602733706,
-      "tag": "0001_create_fatwa_records",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1791765724912,
-      "tag": "0002_custom_slug_and_chat_images",
-      "breakpoints": true
-    }
-  ]
+  "entries": []
 }
