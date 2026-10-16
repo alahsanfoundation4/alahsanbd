@@ -252,7 +252,7 @@ export const Route = createFileRoute("/api/chat")({
           stages.push("search");
           const found = await Promise.race([
             webSearch(lastUser).catch(() => ""),
-            new Promise<string>((r) => setTimeout(() => r(""), 12000)),
+            new Promise<string>((r) => setTimeout(() => r(""), 6000)),
           ]);
           if (found) stages.push("verify");
           system += found
