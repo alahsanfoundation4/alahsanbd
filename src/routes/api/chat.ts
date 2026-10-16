@@ -530,7 +530,9 @@ function needsSearch(t: string): boolean {
   if (/=== সংযুক্ত ফাইল:/.test(t)) return false;
   // Location / time-of-day questions are answered from server clock & location guidance, not web search
   if (/(কোন জায়গায়|কোথায় আছি|আমার অবস্থান|where am i|কয়টা বাজে|কত তারিখ|কি বার|কী বার)/i.test(t)) return false;
-  return /(সর্বশেষ|সাম্প্রতিক|আজকে?র?|এখন|বর্তমান|খবর|সংবাদ|দাম|মূল্য|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|২০২[৪-৯]|latest|today|current|news|price|weather|score|recent|202[4-9]|সার্চ|খুঁজে|search)/i.test(t);
+  // ছোট সাধারণ কথায় (হাই, কেমন আছো, এখন কী করছ) সার্চ নয় — শুধু স্পষ্ট লাইভ-তথ্যের প্রশ্নে
+  if (t.trim().length < 12) return false;
+  return /(সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম কত|বাজার দর|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|latest|news|price|weather|score|সার্চ|খুঁজে|অনুসন্ধান|search|আজকের (খবর|দাম|আবহাওয়া|খেলা|রেট))/i.test(t);
 }
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
