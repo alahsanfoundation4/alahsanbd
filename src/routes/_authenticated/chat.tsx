@@ -120,7 +120,7 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
   } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
 import { LOVABLE_MODELS } from "@/lib/models";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, Camera, MonitorUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
@@ -414,6 +414,32 @@ function ChatPage() {
   const renameConv = (c: Conv) => {
     const t = prompt("নতুন নাম লিখুন", c.title)?.trim();
     if (t && t !== c.title) patchConv(c.id, { title: t.slice(0, 80) });
+  };
+
+  // ক্যামেরা/স্ক্রিন থেকে একটা ফ্রেম তুলে ছবি হিসেবে যুক্ত করা — AI সেটি দেখে উত্তর দেবে
+  const captureFrame = async (src: "camera" | "screen") => {
+    const md = navigator.mediaDevices as MediaDevices | undefined;
+    if (!md || (src === "screen" && !md.getDisplayMedia) || (src === "camera" && !md.getUserMedia))
+      return alert(src === "screen" ? "এই ডিভাইসে স্ক্রিন দেখানো সম্ভব নয় (কম্পিউটারের ব্রাউজারে চেষ্টা করুন)।" : "এই ব্রাউজারে ক্যামেরা চালু করা যাচ্ছে না।");
+    let stream: MediaStream | null = null;
+    try {
+      stream = src === "screen" ? await md.getDisplayMedia({ video: true }) : await md.getUserMedia({ video: { facingMode: "environment" } });
+      const v = document.createElement("video");
+      v.srcObject = stream; v.muted = true; v.playsInline = true;
+      await v.play();
+      await new Promise((r) => setTimeout(r, src === "camera" ? 700 : 300));
+      const scale = Math.min(1, 1280 / (v.videoWidth || 1280));
+      const c = document.createElement("canvas");
+      c.width = Math.round((v.videoWidth || 1280) * scale); c.height = Math.round((v.videoHeight || 720) * scale);
+      c.getContext("2d")?.drawImage(v, 0, 0, c.width, c.height);
+      const url = c.toDataURL("image/jpeg", 0.8);
+      setImages((prev) => (prev.length < 5 ? [...prev, url] : prev));
+      if (!input.trim()) setInput(src === "screen" ? "আমার স্ক্রিনে কী দেখা যাচ্ছে, বিশ্লেষণ করুন।" : "ক্যামেরায় কী দেখা যাচ্ছে, বিশ্লেষণ করুন।");
+    } catch {
+      alert("অনুমতি দেওয়া হয়নি বা চালু করা যায়নি। ব্রাউজারে ক্যামেরা/স্ক্রিনের অনুমতি দিন।");
+    } finally {
+      stream?.getTracks().forEach((t) => t.stop());
+    }
   };
 
   const toggleMic = () => {
@@ -844,6 +870,8 @@ function ChatPage() {
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
             <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)"><ImagePlus size={20} /></button>
             <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
+            <button onClick={() => captureFrame("camera")} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ক্যামেরা দিয়ে ছবি তুলে দেখান" title="ক্যামেরা"><Camera size={20} /></button>
+            <button onClick={() => captureFrame("screen")} className="hidden shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:block sm:p-3" aria-label="স্ক্রিন দেখান" title="স্ক্রিন"><MonitorUp size={20} /></button>
             <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
               {listening ? <MicOff size={20} /> : <Mic size={20} />}
             </button>

@@ -179,7 +179,9 @@ async function handleChat(request: Request): Promise<Response> {
         // সাধারণ ছোট প্রশ্নে অতি-দ্রুত মডেল (২-৩ সেকেন্ডে উত্তর শুরু); ওয়েবসাইট/কোড/দীর্ঘ প্রশ্নে শক্তিশালী মডেল
         // ব্যবহারকারী চ্যাট থেকে নির্দিষ্ট মডেল বেছে নিলে (শুধু অনুমোদিত তালিকা থেকে) সেটাই ব্যবহার
         const picked = provider === "lovable" && parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
-        const isQuick = !picked && provider === "lovable" && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
+        // দ্রুত পথ: সাধারণ প্রশ্নে দ্রুততম মডেল (Google কী না থাকলেও বিল্ট-ইন দিয়ে)
+        const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
+        const isQuick = !picked && (provider === "lovable" || googleNoKey) && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
         let model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
           : baseModel);
@@ -323,7 +325,7 @@ async function handleChat(request: Request): Promise<Response> {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
           // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
           const ac = new AbortController();
-          const timer = setTimeout(() => ac.abort(), attempts.length > 1 ? 20000 : 45000);
+          const timer = setTimeout(() => ac.abort(), isQuick ? 12000 : attempts.length > 1 ? 20000 : 45000);
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
