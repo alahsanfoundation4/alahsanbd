@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
 
 const Body = z.object({
   messages: z
@@ -22,6 +22,7 @@ const Body = z.object({
     )
     .min(1)
     .max(60),
+  model: z.string().max(80).optional(),
 });
 
 const PERSONA = `## তোমার ব্যক্তিত্ব ও কঠোর নিয়ম (সবচেয়ে গুরুত্বপূর্ণ)
@@ -166,10 +167,12 @@ export const Route = createFileRoute("/api/chat")({
         const lastText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
         const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|পেজ বানা|অ্যাপ বানা/i.test(lastText);
         // সাধারণ ছোট প্রশ্নে অতি-দ্রুত মডেল (২-৩ সেকেন্ডে উত্তর শুরু); ওয়েবসাইট/কোড/দীর্ঘ প্রশ্নে শক্তিশালী মডেল
-        const isQuick = provider === "lovable" && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
-        const model = isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
+        // ব্যবহারকারী চ্যাট থেকে নির্দিষ্ট মডেল বেছে নিলে (শুধু অনুমোদিত তালিকা থেকে) সেটাই ব্যবহার
+        const picked = provider === "lovable" && parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
+        const isQuick = !picked && provider === "lovable" && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
+        const model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
-          : baseModel;
+          : baseModel);
 
         // API keys
         let url = "https://ai.gateway.lovable.dev/v1/chat/completions";
