@@ -465,12 +465,12 @@ function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Res
 function stageStream(stages: string[], work: () => Promise<string>): Response {
   const body = new ReadableStream<Uint8Array>({
     async start(c) {
-      for (const st of stages) c.enqueue(sse({ stage: st }));
+      const push = (v: Uint8Array) => { try { c.enqueue(v); return true; } catch { return false; } };
+      for (const st of stages) push(sse({ stage: st }));
       let text = "";
       try { text = await work(); } catch { text = "কাজটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।"; }
-      c.enqueue(sse({ choices: [{ delta: { content: text } }] }));
-      c.enqueue(enc.encode("data: [DONE]\n\n"));
-      c.close();
+      if (push(sse({ choices: [{ delta: { content: text } }] }))) push(enc.encode("data: [DONE]\n\n"));
+      try { c.close(); } catch { /* client already left */ }
     },
   });
   return new Response(body, { headers: SSE_HEADERS });
