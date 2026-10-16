@@ -180,7 +180,7 @@ async function handleChat(request: Request): Promise<Response> {
         // ব্যবহারকারী চ্যাট থেকে নির্দিষ্ট মডেল বেছে নিলে (শুধু অনুমোদিত তালিকা থেকে) সেটাই ব্যবহার
         const picked = provider === "lovable" && parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
         const isQuick = !picked && provider === "lovable" && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
-        const model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
+        let model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
           : baseModel);
 
@@ -193,6 +193,12 @@ async function handleChat(request: Request): Promise<Response> {
         } else if (provider === "openai") {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
+        }
+        // নির্বাচিত সেবার কী না থাকলে বিল্ট-ইন এআই দিয়ে উত্তর (চ্যাট বন্ধ হয়ে যায় না)
+        if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
+          url = "https://ai.gateway.lovable.dev/v1/chat/completions";
+          key = process.env["LOVABLE_API_KEY"];
+          model = model.includes("/") ? model : provider === "google" ? `google/${model}` : DEFAULT_MODELS.lovable;
         }
         if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
 
