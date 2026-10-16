@@ -866,7 +866,7 @@ function ChatPage() {
             </div>
           )}
 
-          <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-card p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
+          <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-background p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
             <input
               ref={fileRef}
               type="file"
