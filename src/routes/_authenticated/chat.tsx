@@ -636,7 +636,7 @@ function ChatPage() {
   return (
     <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground">
       <aside
-        className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 flex-col border-r border-border bg-sidebar md:static md:flex`}
+        className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 flex-col border-r border-border/50 bg-background md:static md:flex`}
       >
         <div className="flex items-center gap-3 p-4">
           <Logo size={32} />
@@ -728,7 +728,7 @@ function ChatPage() {
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
       <main className="bg-background flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <header className="flex min-w-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-3 sm:px-4">
+        <header className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
           <span className="truncate font-display text-lg text-primary">আল আহসান এআই</span>
           <div className="flex items-center gap-2">
@@ -866,7 +866,7 @@ function ChatPage() {
             </div>
           )}
 
-          <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-card p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
+          <div className="mx-auto flex w-full max-w-3xl items-end gap-0.5 rounded-2xl border border-border bg-background p-1 sm:gap-2 sm:p-2 focus-within:border-primary/60">
             <input
               ref={fileRef}
               type="file"
