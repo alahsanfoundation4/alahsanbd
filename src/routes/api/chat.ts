@@ -117,7 +117,17 @@ const INTEGRITY = `\n\n## সততা ও যাচাই প্রোটোক
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
-      POST: async ({ request }) => {
+      POST: async (ctx) => {
+        try { return await handleChat(ctx.request); } catch (e) {
+          console.error("chat failed", e);
+          return new Response("উত্তর তৈরি করা যায়নি। একটু পরে আবার চেষ্টা করুন।", { status: 503 });
+        }
+      },
+    },
+  },
+});
+
+async function handleChat(request: Request): Promise<Response> {
         const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
         const pub = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
@@ -184,7 +194,7 @@ export const Route = createFileRoute("/api/chat")({
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
-        if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 500 });
+        if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
@@ -337,16 +347,13 @@ export const Route = createFileRoute("/api/chat")({
 
         if (!res.ok || !res.body) {
           const err = realErr ?? { status: res.status, text: await res.text().catch(() => "") };
-          return new Response(friendlyError(err.status, err.text), { status: err.status || 500 });
+          return new Response(friendlyError(err.status, err.text), { status: err.status >= 500 || !err.status ? 502 : err.status });
         }
 
         if (realErr) stages.push("fallback");
         stages.push("write");
         return withStages(stages, res.body);
-      },
-    },
-  },
-});
+}
 
 function pick(a: string[]): string {
   return a[Math.floor(Math.random() * a.length)] ?? a[0] ?? "";
