@@ -19,8 +19,8 @@
  */
 
 @theme inline {
-  --font-display: "Tiro Bangla", "Amiri", serif;
-  --font-body: "Hind Siliguri", sans-serif;
+  --font-display: "Noto Serif Bengali", "Hind Siliguri", serif;
+  --font-body: "Hind Siliguri", system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

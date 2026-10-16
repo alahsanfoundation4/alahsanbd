@@ -1,27 +1,40 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { BookOpen, Calculator, Languages, Code2 } from "lucide-react";
 import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
-import { Logo } from "@/components/Logo";
+import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "আল আহসান এআই — Al Ahsan AI" },
-      { name: "description", content: "আল আহসান ফাউন্ডেশন বাংলাদেশের শক্তিশালী বাংলা এআই সহকারী, ভয়েস সহ।" },
-      { property: "og:title", content: "আল আহসান এআই — Al Ahsan AI" },
-      { property: "og:description", content: "শক্তিশালী বাংলা এআই সহকারী — লিখুন বা কথা বলুন।" },
+      { title: "Al Ahsan AI — বাংলা ও ইংরেজি AI সহকারী" },
+      { name: "description", content: "পড়াশোনা, গণিত, বিজ্ঞান, অনুবাদ, লেখালেখি ও প্রোগ্রামিংয়ে সাহায্যকারী বাংলা AI সহকারী।" },
+      { property: "og:title", content: "Al Ahsan AI — বাংলা ও ইংরেজি AI সহকারী" },
+      { property: "og:description", content: "পড়াশোনা, গণিত, বিজ্ঞান, অনুবাদ, লেখালেখি ও প্রোগ্রামিংয়ে সাহায্যকারী বাংলা AI সহকারী।" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Landing,
+  component: Index,
 });
 
-function Landing() {
+const FEATURES = [
+  { icon: BookOpen, t: "পড়াশোনা ও বিজ্ঞান", d: "যেকোনো বিষয় সহজ ভাষায় বুঝে নিন।" },
+  { icon: Calculator, t: "গণিত", d: "ধাপে ধাপে সমাধান।" },
+  { icon: Languages, t: "অনুবাদ ও লেখা", d: "বাংলা, ইংরেজি ও আরও ভাষায়।" },
+  { icon: Code2, t: "প্রোগ্রামিং", d: "কোড লেখা, ব্যাখ্যা ও ডিবাগিং।" },
+];
+
+function Index() {
   const navigate = useNavigate();
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [mode, setMode] = useState<"in" | "up">("in");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -33,162 +46,80 @@ function Landing() {
     return () => data.subscription.unsubscribe();
   }, [navigate]);
 
-  const signIn = async () => {
-    setBusy(true);
-    setErr("");
+  const google = async () => {
+    setBusy(true); setErr("");
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (r.error) {
-      setErr("লগইন ব্যর্থ হয়েছে, আবার চেষ্টা করুন।");
-      setBusy(false);
-      return;
-    }
-    if (r.redirected) return;
-    navigate({ to: "/chat" });
+    if (r.error) { setErr("Google লগইন ব্যর্থ হয়েছে।"); setBusy(false); return; }
+    if (!r.redirected) navigate({ to: "/chat" });
   };
 
-  const features = [
-    { t: "জ্ঞান ও গবেষণা", d: "যেকোনো বিষয়ে বিস্তারিত, সুসংগঠিত ও নির্ভরযোগ্য উত্তর।" },
-    { t: "ইসলামি প্রশ্নোত্তর", d: "কুরআন ও সহিহ হাদিসের আলোকে সূত্রসহ সতর্ক উত্তর।" },
-    { t: "লেখা ও অনুবাদ", d: "চিঠি, প্রবন্ধ, আবেদন — বাংলা, ইংরেজি, আরবিতে অনুবাদ।" },
-    { t: "ওয়েবসাইট ও কোড", d: "চাইলেই সম্পূর্ণ ওয়েবসাইট তৈরি, সাথে সাথে লাইভ লিংক।" },
-    { t: "কণ্ঠে কথা বলুন", d: "মাইক চেপে প্রশ্ন করুন, উত্তর শুনুন বাংলায়।" },
-    { t: "নিরাপদ ও ব্যক্তিগত", d: "আপনার কথোপকথন শুধু আপনিই দেখতে পান।" },
-  ];
-  const faqs = [
-    ["এটি কি বিনামূল্যে?", "হ্যাঁ, গুগল অ্যাকাউন্ট দিয়ে প্রবেশ করে বিনামূল্যে ব্যবহার করতে পারবেন। ন্যায্য ব্যবহারের জন্য প্রতিদিন প্রশ্নের একটি সীমা আছে।"],
-    ["আমার কথোপকথন কি সংরক্ষিত থাকে?", "হ্যাঁ, আপনার সব কথোপকথন আপনার অ্যাকাউন্টে নিরাপদে থাকে এবং যেকোনো সময় মুছে ফেলতে পারবেন।"],
-    ["ইসলামি উত্তর কতটা নির্ভরযোগ্য?", "এআই সূত্রসহ উত্তর দেওয়ার চেষ্টা করে, তবে গুরুত্বপূর্ণ মাসআলায় অবশ্যই একজন বিজ্ঞ আলেমের পরামর্শ নিন।"],
-  ];
-
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [info, setInfo] = useState("");
-  const emailAuth = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setErr(""); setInfo("");
     if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
       setBusy(false);
-      if (error) setErr("ইমেইল বা পাসওয়ার্ড ভুল, অথবা ইমেইল এখনো নিশ্চিত করা হয়নি।");
+      if (error) setErr("লগইন ব্যর্থ: ইমেইল বা পাসওয়ার্ড ভুল।");
       else navigate({ to: "/chat" });
     } else {
       const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin } });
       setBusy(false);
       if (error) setErr(error.message);
-      else setInfo("আপনার ইমেইলে নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে চাপ দিয়ে তারপর প্রবেশ করুন।");
+      else setInfo("আপনার ইমেইলে একটি নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে ক্লিক করে তারপর লগইন করুন।");
     }
   };
-  const emailForm = (
-    <form onSubmit={emailAuth} className="mt-4 flex w-full max-w-sm flex-col gap-2 text-left">
-      <div className="text-center text-xs text-muted-foreground">অথবা ইমেইল দিয়ে</div>
-      <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ইমেইল" className="rounded-xl bg-card px-4 py-2.5 text-sm outline-none ring-1 ring-border focus:ring-primary" />
-      <input type="password" required minLength={6} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" className="rounded-xl bg-card px-4 py-2.5 text-sm outline-none ring-1 ring-border focus:ring-primary" />
-      <button type="submit" disabled={busy} className="rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{mode === "in" ? "প্রবেশ করুন" : "নতুন অ্যাকাউন্ট খুলুন"}</button>
-      <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="text-center text-xs text-primary">{mode === "in" ? "অ্যাকাউন্ট নেই? নতুন খুলুন" : "আগেই অ্যাকাউন্ট আছে? প্রবেশ করুন"}</button>
-      {info && <p className="text-center text-xs text-primary">{info}</p>}
-    </form>
-  );
-
-  const cta = (
-    <button
-      onClick={signIn}
-      disabled={busy}
-      className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/60 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px_var(--primary)] transition hover:scale-[1.02] sm:gap-3 sm:px-8 sm:py-4 sm:text-lg disabled:opacity-60"
-    >
-      <span className="grid h-8 w-8 place-items-center rounded-full bg-card">
-        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
-          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-        </svg>
-      </span>
-      {busy ? "অপেক্ষা করুন…" : "গুগল দিয়ে প্রবেশ করুন"}
-    </button>
-  );
 
   return (
-    <main className="pattern-bg relative min-h-screen overflow-hidden text-foreground">
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-3">
-          <Logo size={36} />
-          <span className="font-display text-xl">আল আহসান এআই</span>
-        </div>
-        <button onClick={signIn} disabled={busy} className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-2 text-sm text-primary hover:bg-primary/10 disabled:opacity-60">
-          <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
-            <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-            <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-            <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-          </svg>
-          প্রবেশ করুন
-        </button>
-      </header>
+    <main className="min-h-screen bg-background">
+      <section className="mx-auto max-w-4xl px-6 py-20 text-center">
+        <img src={logo} alt="Al-Ahsan Foundation লোগো" className="mx-auto h-32 w-32 rounded-full shadow-lg" />
+        <h1 className="mt-8 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Al Ahsan AI</h1>
+        <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
+          আপনার বিশ্বস্ত বাংলা AI সহকারী — প্রশ্ন করুন, শিখুন, সমাধান খুঁজুন।
+        </p>
 
-      <section className="relative flex flex-col items-center px-4 pb-16 pt-8 text-center sm:px-6 sm:pb-24 sm:pt-12">
-        <div className="glow" />
-        <div className="relative z-10 flex w-full max-w-3xl flex-col items-center">
-          <Logo size={68} />
-          <p className="mt-4 font-display text-sm tracking-[0.25em] text-primary sm:mt-6 sm:text-lg sm:tracking-[0.3em]">بِسْمِ اللّٰهِ</p>
-          <h1 className="mt-3 font-display text-3xl leading-tight sm:mt-4 sm:text-5xl md:text-7xl">আল আহসান এআই</h1>
-          <p className="mt-2 text-xs uppercase tracking-[0.3em] text-muted-foreground sm:text-sm sm:tracking-[0.4em]">Al Ahsan AI</p>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mt-6 sm:text-lg">
-            জ্ঞান, লেখা, অনুবাদ, গবেষণা ও প্রোগ্রামিং — সব কাজে আপনার শক্তিশালী বাংলা সহকারী। লিখে বা কথা বলে প্রশ্ন করুন।
-          </p>
-          <div className="mt-7 sm:mt-10">{cta}</div>
-          {emailForm}
-          {err && <p className="mt-4 text-destructive">{err}</p>}
-        </div>
-      </section>
+        {!showForm ? (
+          <button
+            onClick={() => setShowForm(true)}
+            className="mt-8 inline-flex rounded-full bg-primary px-8 py-3 font-semibold text-primary-foreground shadow hover:opacity-90"
+          >
+            চ্যাট শুরু করুন
+          </button>
+        ) : (
+          <div className="mx-auto mt-8 w-full max-w-sm rounded-2xl border bg-card p-6 text-left shadow-sm">
+            <p className="text-center text-sm text-muted-foreground">
+              {mode === "in" ? "আপনার অ্যাকাউন্টে প্রবেশ করুন" : "নতুন অ্যাকাউন্ট তৈরি করুন"}
+            </p>
+            <button onClick={google} disabled={busy} className="mt-4 w-full rounded-md border bg-background py-2.5 text-sm font-medium hover:bg-accent disabled:opacity-60">
+              Google দিয়ে চালিয়ে যান
+            </button>
+            <div className="my-4 text-center text-xs text-muted-foreground">অথবা</div>
+            <form onSubmit={submit} className="space-y-3">
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ইমেইল" className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <input type="password" required minLength={6} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="পাসওয়ার্ড" className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <button type="submit" disabled={busy} className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                {busy ? "অপেক্ষা করুন…" : mode === "in" ? "লগইন" : "সাইন আপ"}
+              </button>
+            </form>
+            <button onClick={() => setMode(mode === "in" ? "up" : "in")} className="mt-4 w-full text-center text-sm text-primary hover:underline">
+              {mode === "in" ? "অ্যাকাউন্ট নেই? সাইন আপ করুন" : "আগেই অ্যাকাউন্ট আছে? লগইন করুন"}
+            </button>
+            {info && <p className="mt-3 rounded-lg bg-accent p-3 text-sm text-accent-foreground">{info}</p>}
+            {err && <p className="mt-3 text-center text-sm text-destructive">{err}</p>}
+          </div>
+        )}
 
-      <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
-        <h2 className="text-center font-display text-3xl md:text-4xl">যা যা করতে পারে</h2>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((f) => (
-            <div key={f.t} className="rounded-2xl border border-border bg-card/70 p-6 transition hover:border-primary/60">
-              <h3 className="font-display text-xl text-primary">{f.t}</h3>
-              <p className="mt-2 text-muted-foreground">{f.d}</p>
+        <div className="mt-16 grid gap-4 text-left sm:grid-cols-2">
+          {FEATURES.map((f) => (
+            <div key={f.t} className="rounded-2xl border bg-card p-5">
+              <f.icon className="h-6 w-6 text-primary" />
+              <h2 className="mt-3 font-semibold">{f.t}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{f.d}</p>
             </div>
           ))}
         </div>
       </section>
-
-      <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
-        <div className="grid items-center gap-10 rounded-3xl border border-border bg-card/60 p-8 md:grid-cols-2 md:p-12">
-          <div>
-            <p className="text-sm font-semibold text-primary">আমাদের সম্পর্কে</p>
-            <h2 className="mt-3 font-display text-3xl md:text-4xl">আল আহসান ফাউন্ডেশন বাংলাদেশ</h2>
-            <p className="mt-4 leading-relaxed text-muted-foreground">
-              সুন্নাহর আলোয় জ্ঞান ও সেবা ছড়িয়ে দেওয়াই আমাদের লক্ষ্য। আধুনিক প্রযুক্তিকে কাজে লাগিয়ে সবার হাতে সহজে নির্ভরযোগ্য জ্ঞান পৌঁছে দিতে আমরা তৈরি করেছি আল আহসান এআই।
-            </p>
-          </div>
-          <ol className="space-y-4">
-            {["গুগল অ্যাকাউন্ট দিয়ে প্রবেশ করুন", "লিখে বা কথা বলে প্রশ্ন করুন", "উত্তর কপি করুন, শুনুন বা পরে আবার দেখুন"].map((s, i) => (
-              <li key={s} className="flex items-center gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-display text-primary-foreground">{"১২৩"[i]}</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="relative z-10 mx-auto max-w-3xl px-6 pb-24">
-        <h2 className="text-center font-display text-3xl md:text-4xl">সাধারণ প্রশ্ন</h2>
-        <div className="mt-8 space-y-3">
-          {faqs.map(([q, a]) => (
-            <details key={q} className="rounded-xl border border-border bg-card/60 p-5">
-              <summary className="cursor-pointer font-display text-lg text-primary">{q}</summary>
-              <p className="mt-3 leading-relaxed text-muted-foreground">{a}</p>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      <footer className="relative z-10 border-t border-border/60 px-6 py-8 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} আল আহসান ফাউন্ডেশন বাংলাদেশ। সর্বস্বত্ব সংরক্ষিত।
-      </footer>
+      <footer className="pb-8 text-center text-sm text-muted-foreground">© Al-Ahsan Foundation, Bangladesh</footer>
     </main>
   );
 }
