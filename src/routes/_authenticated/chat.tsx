@@ -119,6 +119,7 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
     saveBlob(await Packer.toBlob(d), "al-ahsan-answer.docx");
   } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
+import { LOVABLE_MODELS } from "@/lib/models";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { useIsAdmin } from "@/lib/admin";
@@ -817,6 +818,7 @@ function ChatPage() {
               }}
             />
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
+            <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="shrink-0 max-w-[6.5rem] sm:max-w-[10rem] rounded-xl border border-border bg-background px-2 py-2 text-xs text-foreground" aria-label="AI মডেল বেছে নিন" title="AI মডেল"><option value="">স্বয়ংক্রিয় (দ্রুত)</option>{LOVABLE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
             <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)"><ImagePlus size={20} /></button>
             <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
             <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
