@@ -120,6 +120,8 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
   } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
 import { LOVABLE_MODELS } from "@/lib/models";
+import { Settings as SettingsIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { useIsAdmin } from "@/lib/admin";
@@ -697,6 +699,19 @@ function ChatPage() {
             <button onClick={() => printChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="প্রিন্ট / PDF" title="প্রিন্ট / PDF"><Printer size={16} /></button>
             <button onClick={() => downloadChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডাউনলোড" title="ডাউনলোড"><Download size={16} /></button>
           </>)}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className={`rounded-full border p-1.5 hover:text-primary ${mode || model ? "border-primary text-primary" : "border-border text-muted-foreground"}`} aria-label="সেটিংস" title="সেটিংস"><SettingsIcon size={16} /></button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 space-y-3">
+              <label className="block text-xs text-muted-foreground">কাজের ধরন
+                <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">সাধারণ</option>{MODES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+              </label>
+              <label className="block text-xs text-muted-foreground">AI মডেল
+                <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">স্বয়ংক্রিয় (দ্রুত)</option>{LOVABLE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+              </label>
+            </PopoverContent>
+          </Popover>
           <button onClick={toggleDark} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডার্ক মোড" title="ডার্ক / লাইট মোড">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
           <button
             onClick={() => { setVoiceOut(!voiceOut); window.speechSynthesis?.cancel(); }}
@@ -827,8 +842,6 @@ function ChatPage() {
               }}
             />
             <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
-            <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="shrink-0 max-w-[5.5rem] sm:max-w-[8rem] rounded-xl border border-border bg-background px-2 py-2 text-xs text-foreground" aria-label="কাজের ধরন" title="কাজের ধরন"><option value="">সাধারণ</option>{MODES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
-            <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="shrink-0 max-w-[6.5rem] sm:max-w-[10rem] rounded-xl border border-border bg-background px-2 py-2 text-xs text-foreground" aria-label="AI মডেল বেছে নিন" title="AI মডেল"><option value="">স্বয়ংক্রিয় (দ্রুত)</option>{LOVABLE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
             <button onClick={() => fileRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)"><ImagePlus size={20} /></button>
             <button onClick={() => docRef.current?.click()} className="shrink-0 rounded-xl p-2 text-primary hover:bg-primary/10 sm:p-3" aria-label="ফাইল যুক্ত করুন" title="PDF / Word / লেখা ফাইল"><Paperclip size={20} /></button>
             <button onClick={toggleMic} className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="ভয়েস">
