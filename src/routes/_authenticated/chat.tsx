@@ -139,6 +139,11 @@ export const Route = createFileRoute("/_authenticated/chat")({
 });
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean };
+const MODES = [
+  { id: "study", label: "পড়াশোনা", hint: "শিক্ষকের মতো ধাপে ধাপে সহজ ভাষায় বোঝাও, উদাহরণ দাও, শেষে ৩টি ছোট অনুশীলন প্রশ্ন দাও।" },
+  { id: "write", label: "লেখালেখি", hint: "দক্ষ লেখক ও সম্পাদকের মতো সুন্দর, সাবলীল, নির্ভুল ভাষায় লেখো; প্রয়োজনে শিরোনাম ও অনুচ্ছেদ সাজাও।" },
+  { id: "code", label: "কোডিং", hint: "অভিজ্ঞ প্রোগ্রামারের মতো সম্পূর্ণ, চালানোর উপযোগী কোড দাও, ভাষা উল্লেখ করা কোড ব্লকে, সংক্ষিপ্ত ব্যাখ্যাসহ।" },
+];
 type Conv = { id: string; title: string; pinned: boolean; archived: boolean };
 
 // বর্তমান চ্যাটের সাইট-ঠিকানা (আগের ভার্সন একই লিংকে ফিরিয়ে আনার জন্য)
@@ -297,6 +302,8 @@ function ChatPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>("");
+  const [mode, setMode] = useState<string>("");
+  useEffect(() => { setMode(localStorage.getItem("ahsan-mode") || ""); }, []);
   useEffect(() => { setModel(localStorage.getItem("ahsan-model") ?? ""); }, []);
     const [images, setImages] = useState<string[]>([]);
   const [customSlug, setCustomSlug] = useState("");
@@ -441,7 +448,9 @@ function ChatPage() {
     const typed = override !== undefined ? override.trim() : input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
     // Show/store only a short label; the full file text goes to the AI for this message only
     const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
-    const apiText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    const modeHint = MODES.find((x) => x.id === mode)?.hint;
+    const baseText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    const apiText = modeHint ? `[নির্দেশ: ${modeHint}]\n\n${baseText}` : baseText;
     if (!typed || loading || docBusy) return;
     setInput("");
     setImages([]);
