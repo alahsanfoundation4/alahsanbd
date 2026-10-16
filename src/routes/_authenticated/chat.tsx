@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
-import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil } from "lucide-react";
+import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil, Pin, PinOff, Archive, ArchiveRestore } from "lucide-react";
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 
@@ -138,7 +138,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
 });
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean };
-type Conv = { id: string; title: string };
+type Conv = { id: string; title: string; pinned: boolean; archived: boolean };
 
 // বর্তমান চ্যাটের সাইট-ঠিকানা (আগের ভার্সন একই লিংকে ফিরিয়ে আনার জন্য)
 const siteSlugRef = { current: "" };
@@ -291,6 +291,7 @@ function ChatPage() {
   const [copied, setCopied] = useState<number | null>(null);
   const copy = async (t: string, i: number) => { await navigator.clipboard.writeText(t); setCopied(i); setTimeout(() => setCopied(null), 1500); };
   const [convs, setConvs] = useState<Conv[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -364,7 +365,7 @@ function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadConvs = async () => {
-    const { data } = await supabase.from("conversations").select("id,title").order("updated_at", { ascending: false });
+    const { data } = await supabase.from("conversations").select("id,title,pinned,archived").order("pinned", { ascending: false }).order("updated_at", { ascending: false });
     setConvs(data ?? []);
   };
   useEffect(() => {
@@ -388,9 +389,19 @@ function ChatPage() {
   };
 
   const delConv = async (id: string) => {
+    if (!confirm("এই কথোপকথনটি মুছে ফেলবেন?")) return;
     await supabase.from("conversations").delete().eq("id", id);
     if (active === id) newChat();
     loadConvs();
+  };
+  const patchConv = async (id: string, patch: { title?: string; pinned?: boolean; archived?: boolean }) => {
+    const { error } = await supabase.from("conversations").update(patch).eq("id", id);
+    if (error) alert("পরিবর্তন সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।");
+    loadConvs();
+  };
+  const renameConv = (c: Conv) => {
+    const t = prompt("নতুন নাম লিখুন", c.title)?.trim();
+    if (t && t !== c.title) patchConv(c.id, { title: t.slice(0, 80) });
   };
 
   const toggleMic = () => {
@@ -581,14 +592,25 @@ function ChatPage() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="কথোপকথন খুঁজুন…" className="w-full bg-transparent outline-none placeholder:text-muted-foreground" />
         </div>
         <div className="mt-3 flex-1 space-y-1 overflow-y-auto px-2">
-          {convs.filter((c) => c.title.toLowerCase().includes(q.toLowerCase())).map((c) => (
-            <div key={c.id} className={`group flex items-center rounded-lg px-3 py-2 text-sm ${active === c.id ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"}`}>
+          {convs.filter((c) => c.archived === showArchived && c.title.toLowerCase().includes(q.toLowerCase())).map((c) => (
+            <div key={c.id} className={`group flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm ${active === c.id ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"}`}>
+              {c.pinned && <Pin size={12} className="shrink-0 text-primary" aria-label="পিন করা" />}
               <button onClick={() => openConv(c.id)} className="flex-1 truncate text-left">{c.title}</button>
-              <button onClick={() => delConv(c.id)} className="md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:text-destructive" aria-label="মুছুন">
-                <Trash2 size={15} />
-              </button>
+              <div className="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100">
+                <button onClick={() => patchConv(c.id, { pinned: !c.pinned })} className="text-muted-foreground hover:text-primary" aria-label={c.pinned ? "পিন সরান" : "পিন করুন"} title={c.pinned ? "পিন সরান" : "পিন করুন"}>
+                  {c.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                </button>
+                <button onClick={() => renameConv(c)} className="text-muted-foreground hover:text-primary" aria-label="নাম পরিবর্তন" title="নাম পরিবর্তন"><Pencil size={14} /></button>
+                <button onClick={() => patchConv(c.id, { archived: !c.archived })} className="text-muted-foreground hover:text-primary" aria-label={c.archived ? "আর্কাইভ থেকে ফেরান" : "আর্কাইভ করুন"} title={c.archived ? "আর্কাইভ থেকে ফেরান" : "আর্কাইভ করুন"}>
+                  {c.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                </button>
+                <button onClick={() => delConv(c.id)} className="text-muted-foreground hover:text-destructive" aria-label="মুছুন" title="মুছুন"><Trash2 size={14} /></button>
+              </div>
             </div>
           ))}
+          <button onClick={() => setShowArchived((v) => !v)} className="mt-2 w-full rounded-lg px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/60">
+            {showArchived ? "← সক্রিয় কথোপকথনে ফিরুন" : `আর্কাইভ (${convs.filter((c) => c.archived).length})`}
+          </button>
         </div>
         {bookmarks.length > 0 && (
           <div className="max-h-48 overflow-y-auto border-t border-border px-2 py-2 text-sm">
