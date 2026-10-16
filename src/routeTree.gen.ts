@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedSalatRouteImport } from './routes/_authenticated/salat'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
@@ -57,6 +58,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
 const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSalatRoute = AuthenticatedSalatRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/chat'
+    | '/profile'
     | '/salat'
     | '/api/chat'
     | '/api/health'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/chat'
+    | '/profile'
     | '/salat'
     | '/api/chat'
     | '/api/health'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_authenticated/admin'
     | '/_authenticated/chat'
+    | '/_authenticated/profile'
     | '/_authenticated/salat'
     | '/api/chat'
     | '/api/health'
@@ -268,6 +280,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/salat': {
       id: '/_authenticated/salat'
       path: '/salat'
@@ -330,12 +349,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSalatRoute: typeof AuthenticatedSalatRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSalatRoute: AuthenticatedSalatRoute,
 }
 
