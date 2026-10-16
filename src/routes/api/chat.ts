@@ -129,27 +129,34 @@ export const Route = createFileRoute("/api/chat")({
         if (!parsed.success) return new Response("Invalid input", { status: 400 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: s } = await supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle();
-        const { data: keys } = await supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle();
-
-        // Rate limit (admins are exempt)
         const uid = u.user.id;
-        const { data: isAdmin } = await supabaseAdmin.rpc("has_role", { _user_id: uid, _role: "admin" });
+        // দ্রুততার জন্য সব প্রস্তুতি একসাথে (সমান্তরালে)
+        const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+        const dayAgo = new Date(Date.now() - 86400_000).toISOString();
+        const [{ data: s }, { data: keys }, { data: isAdmin }, { count: h }, { count: d }] = await Promise.all([
+          supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle(),
+          supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle(),
+          supabaseAdmin.rpc("has_role", { _user_id: uid, _role: "admin" }),
+          supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", hourAgo),
+          supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", dayAgo),
+        ]);
         if (s && s.chat_enabled === false && !isAdmin)
           return new Response("চ্যাট সাময়িকভাবে বন্ধ আছে। একটু পরে আবার চেষ্টা করুন।", { status: 503 });
         if (!isAdmin) {
-          const hourAgo = new Date(Date.now() - 3600_000).toISOString();
-          const dayAgo = new Date(Date.now() - 86400_000).toISOString();
-          const [{ count: h }, { count: d }] = await Promise.all([
-            supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", hourAgo),
-            supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", dayAgo),
-          ]);
           if ((h ?? 0) >= (s?.hourly_limit ?? 30))
             return new Response(`এক ঘণ্টায় সর্বোচ্চ ${s?.hourly_limit ?? 30}টি প্রশ্ন করা যায়। কিছুক্ষণ পর আবার চেষ্টা করুন।`, { status: 429 });
           if ((d ?? 0) >= (s?.daily_limit ?? 150))
             return new Response(`আজকের সীমা (${s?.daily_limit ?? 150}টি প্রশ্ন) শেষ। আগামীকাল আবার চেষ্টা করুন।`, { status: 429 });
         }
-        await supabaseAdmin.from("chat_usage").insert({ user_id: uid });
+        void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
+        const memP = (async () => {
+          const mem = await import("@/lib/memory.server");
+          const [items, rec] = await Promise.all([
+            mem.loadMemory(uid, 60),
+            supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15),
+          ]);
+          return { items, recent: rec.data };
+        })().catch((e) => { console.error("memory load failed", e); return { items: [] as { text: string }[], recent: null }; });
 
         const provider = (s?.provider ?? "lovable") as Provider;
         const stored = (s?.model || "").trim();
@@ -158,7 +165,9 @@ export const Route = createFileRoute("/api/chat")({
         // ওয়েবসাইট/কোড অনুরোধে হালকা (lite) মডেল ছোট কোড দেয় — তাই শক্তিশালী মডেলে পাঠানো
         const lastText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
         const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|পেজ বানা|অ্যাপ বানা/i.test(lastText);
-        const model = isSiteReq && /lite/i.test(baseModel)
+        // সাধারণ ছোট প্রশ্নে অতি-দ্রুত মডেল (২-৩ সেকেন্ডে উত্তর শুরু); ওয়েবসাইট/কোড/দীর্ঘ প্রশ্নে শক্তিশালী মডেল
+        const isQuick = provider === "lovable" && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
+        const model = isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
           : baseModel;
 
@@ -215,18 +224,13 @@ export const Route = createFileRoute("/api/chat")({
         system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nএখন বাংলাদেশ সময়: ${bdDate} (ISO ${now.toISOString()})। তারিখ/সময় জিজ্ঞেস করলে এটাই বলবে; কখনো বলবে না যে তোমার ঘড়ি বা ইন্টারনেট নেই। তোমার সরাসরি ওয়েব অনুসন্ধান ও লিংক পড়ার ক্ষমতা আছে।`;
         system += `\n\n=== চার্ট নির্দেশনা ===\nযখন উত্তরে তুলনামূলক সংখ্যা, পরিসংখ্যান, বছরভিত্তিক পরিবর্তন বা শতাংশ থাকে, তখন একটি চার্ট যুক্ত করবে। ফরম্যাট ঠিক এরকম (\`\`\`chart কোড ব্লকে বৈধ JSON):\n\`\`\`chart\n{"type":"bar","title":"শিরোনাম","data":[{"name":"ক","value":10},{"name":"খ","value":20}]}\n\`\`\`\ntype হতে পারে "bar", "line" বা "pie"। শুধু বাস্তব/যাচাইকৃত সংখ্যা ব্যবহার করবে, কাল্পনিক সংখ্যা নয়।`;
 
-        // Per-user long-term memory (database) + recent talk from other chats
-        try {
-          const mem = await import("@/lib/memory.server");
-          const items = await mem.loadMemory(uid, 60);
+        // Per-user long-term memory (database) + recent talk — আগেই সমান্তরালে লোড শুরু হয়েছে
+        {
+          const { items, recent } = await memP;
           if (items.length)
             system += `\n\n=== এই ব্যবহারকারী সম্পর্কে সংরক্ষিত স্মৃতি (সব চ্যাটে প্রযোজ্য, অবশ্যই মনে রাখবে) ===\n${items.map((m) => "- " + m.text).join("\n")}`;
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { data: recent } = await supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15);
           if (recent?.length)
-            system += `\n\n=== এই ব্যবহারকারীর আগের চ্যাটগুলোতে সাম্প্রতিক কথা (প্রসঙ্গ মনে রাখতে ব্যবহার করবে) ===\n${recent.reverse().map((r) => "- " + String(r.content).slice(0, 200).replace(/\s+/g, " ")).join("\n")}`;
-        } catch (e) {
-          console.error("memory load failed", e);
+            system += `\n\n=== এই ব্যবহারকারীর আগের চ্যাটগুলোতে সাম্প্রতিক কথা (প্রসঙ্গ মনে রাখতে ব্যবহার করবে) ===\n${[...recent].reverse().map((r) => "- " + String(r.content).slice(0, 200).replace(/\s+/g, " ")).join("\n")}`;
         }
 
         const lastUser = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
@@ -248,7 +252,7 @@ export const Route = createFileRoute("/api/chat")({
           stages.push("search");
           const found = await Promise.race([
             webSearch(lastUser).catch(() => ""),
-            new Promise<string>((r) => setTimeout(() => r(""), 12000)),
+            new Promise<string>((r) => setTimeout(() => r(""), 6000)),
           ]);
           if (found) stages.push("verify");
           system += found

@@ -420,6 +420,10 @@ function ChatPage() {
     }
     const imgPayload: Partial<Pick<Msg, "images" | "image">> = imgs[0] ? { images: imgs, image: imgs[0] } : {};
     const history: Msg[] = [...msgs.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
+    // ভার্সন সিস্টেম: এই চ্যাটে আগের ওয়েবসাইট থাকলে সেটিকেই ভিত্তি ধরে শুধু চাওয়া পরিবর্তন
+    const siteMsgs = msgs.filter((m) => m.role === "assistant" && /```html/i.test(m.content));
+    const prevSite = siteMsgs.length ? [...siteMsgs[siteMsgs.length - 1]!.content.matchAll(/```html\s*\n([\s\S]*?)```/gi)].map((x) => x[1]).join("\n") : "";
+    const siteVersion = siteMsgs.length + 1;
     setMsgs([...msgs, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
     setLoading(true);
@@ -436,7 +440,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? apiText : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 36000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }) }),
+        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
@@ -502,13 +506,13 @@ function ChatPage() {
             body: JSON.stringify({
               title: text.slice(0, 80),
               html: htmlCode.trim(),
-              slug: customSlug.trim() || undefined,
+              slug: customSlug.trim() || `site-${convId.slice(0, 8)}`,
             }),
           });
           if (pr.ok) {
             const { url } = await pr.json();
             const liveUrl = `${window.location.origin}${url}`;
-            full += `\n\n---\n\n### লাইভ লিংক তৈরি হয়েছে\n\n[${liveUrl}](${liveUrl})\n\nলিংকে চাপ দিলেই ওয়েবসাইটটি সরাসরি খুলবে।`;
+            full += `\n\n---\n\n### লাইভ লিংক তৈরি হয়েছে — ভার্সন ${siteVersion}\n\n[${liveUrl}](${liveUrl})\n\nলিংকে চাপ দিলেই ওয়েবসাইটটি সরাসরি খুলবে। আরও পরিবর্তন চাইলে শুধু লিখুন — একই লিংকে নতুন ভার্সন আপডেট হবে।`;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
             pushStage("test");
             const chk = await fetch(url).catch(() => null);
@@ -656,7 +660,8 @@ function ChatPage() {
               </div>
             )}
             {msgs.map((m, i) => (
-              <div key={i} className={`mb-5 flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`mb-5 flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" && <div className="mt-0.5 shrink-0 overflow-hidden rounded-full"><Logo size={30} /></div>}
                 <div className={m.role === "user" ? "max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai min-w-0 max-w-full flex-1 break-words"}>
                   {m.role === "user" ? (
                     <>
