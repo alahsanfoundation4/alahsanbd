@@ -2,7 +2,7 @@
 
 - [x] Email sign-in was disabled on the remixed backend — enabled; test signup returns confirmation_sent_at (real inbox delivery pending manual check)
 - [x] Password reset (forgot link + /reset-password page) — pending manual email check
-- [ ] Phase 4: stop/regenerate/copy/edit message
+- [x] Phase 4: stop/regenerate/copy/edit message (code done; signed-in click test pending)
 - [ ] Phase 5: model picker
 - [ ] Phase 6–7: file + image AI
 - [ ] Phase 8–9: voice / live
