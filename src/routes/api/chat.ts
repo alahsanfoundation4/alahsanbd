@@ -182,7 +182,7 @@ async function handleChat(request: Request): Promise<Response> {
         // দ্রুত পথ: সাধারণ প্রশ্নে দ্রুততম মডেল (Google কী না থাকলেও বিল্ট-ইন দিয়ে)
         const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
         const isQuick = !picked && (provider === "lovable" || googleNoKey) && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|বিশ্লেষণ|অংক|গণিত/i.test(lastText);
-        let model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
+        let model = picked ?? (isQuick ? "google/gemini-3-flash-preview" : isSiteReq && /lite/i.test(baseModel)
           ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
           : baseModel);
 

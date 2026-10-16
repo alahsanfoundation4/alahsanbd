@@ -719,7 +719,7 @@ function ChatPage() {
       </aside>
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
-      <main className="pattern-bg flex min-w-0 flex-1 flex-col overflow-x-hidden">
+      <main className="bg-background flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="flex min-w-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
           <span className="truncate font-display text-lg text-primary">আল আহসান এআই</span>
@@ -751,7 +751,7 @@ function ChatPage() {
           </div>
         </header> 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl px-3 py-6 sm:px-6">
 
             {msgs.length === 0 && (
               <div className="mt-20 flex flex-col items-center text-center">
@@ -767,7 +767,7 @@ function ChatPage() {
             )}
             {msgs.map((m, i) => (
               <div key={i} className={`mb-5 flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                {m.role === "assistant" && <div className="mt-0.5 shrink-0 overflow-hidden rounded-full"><Logo size={30} /></div>}
+                {m.role === "assistant" && <div className="mt-0.5 hidden shrink-0 overflow-hidden rounded-full sm:block"><Logo size={30} /></div>}
                 <div className={m.role === "user" ? "max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-primary-foreground" : "prose-ai min-w-0 max-w-full flex-1 break-words"}>
                   {m.role === "user" ? (
                     <>
