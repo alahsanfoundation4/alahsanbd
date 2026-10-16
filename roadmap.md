@@ -4,7 +4,8 @@
 - [x] Password reset (forgot link + /reset-password page) — pending manual email check
 - [x] Phase 4: stop/regenerate/copy/edit message; regenerate no longer double-saves the question (signed-in click test pending)
 - [x] Phase 5: model picker in chat (auto + allowed list, server-validated)
-- [ ] Phase 6–7: file + image AI
+- [x] Phase 6–8: image (5), PDF/Word files, image generation, mic + voice reply (already existed, audited)
 - [ ] Phase 8–9: voice / live
-- [ ] Phase 10–15: study, writing, coding, builders, workspace
+- [x] Phase 10–12: study / writing / coding mode picker
+- [ ] Phase 13–15: builders, workspace
 - [ ] Phase 16–22: search, settings, admin, security, performance, testing
