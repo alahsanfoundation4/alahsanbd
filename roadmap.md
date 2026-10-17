@@ -1,6 +1,6 @@
 # Al-Ahsan AI roadmap
 
-- [ ] Add masculine voice selector; verify authenticated startup, audio playback, Stop, and unchanged reasoning settings
+- [x] Added allowlisted masculine voice selector before Start; signed-in male-voice call returned Bengali mathematical answer with playing nonzero audio, mute/unmute and released audio after Stop; eight tests pass; model/effort/caps unchanged
 
 - [x] Current latency pass: overlap session/conversation creation and URL preparation; start voice reply before database saves; consolidate voice transcript fragments without dropping words; preserve models/effort/caps/timers; six tests pass
 - [x] Signed-in verification: three new-chat answers appeared after 3.85 / 2.36 / 2.35 seconds and the saved answer read back; voice produced a Bengali mathematical proof with nonzero playing audio, mute/unmute, Stop and released audio; delegated response took 6.052 seconds, so no 1–2s guarantee
