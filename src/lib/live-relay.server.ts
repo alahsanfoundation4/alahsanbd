@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { groupVoiceTranscripts } from "./voice-transcripts";
 import { resolveLiveVoice } from "./live-voices";
+import { voiceError } from "./service-errors";
 
 import {
   connectLive,
@@ -470,8 +471,8 @@ export function bindLiveConnection(
       (async () => {
         try {
           for await (const event of accepted) receiveGateway(event);
-        } catch {
-          if (!closing) emit({ type: "app.error", error: { message: "Voice gateway connection failed" } });
+        } catch (error) {
+          if (!closing) emit({ type: "app.error", error: { message: voiceError(error) } });
         } finally {
           finish();
         }
@@ -495,7 +496,7 @@ export function bindLiveConnection(
             if (!closing)
               emit({
                 type: "app.error",
-                error: { message: error instanceof Error ? error.message : "Voice startup failed" },
+                error: { message: voiceError(error) },
               });
             stop();
           }),

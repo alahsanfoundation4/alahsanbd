@@ -9,6 +9,8 @@ import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
 import { Button } from "@/components/ui/button";
+import { serviceError } from "@/lib/service-errors";
+import { toast } from "sonner";
 import { Phone } from "lucide-react";
 
 import { extractDocText, loadBookmarks, saveBookmarks, downloadShareCard, type Bookmark } from "@/lib/extras";
@@ -540,7 +542,7 @@ function ChatPage() {
         body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
         signal: abortRef.current.signal,
       });
-      if (!res.ok || !res.body) throw new Error(await res.text());
+      if (!res.ok || !res.body) { await res.text(); const message = serviceError(res.status); toast.error(message); throw new Error(message); }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
@@ -552,7 +554,7 @@ function ChatPage() {
         try {
           const j = JSON.parse(d);
           if (j.stage) return pushStage(j.stage);
-          if (j.error) { showErr(String(j.error)); return; }
+          if (j.error) { const message = serviceError(j.error.status ?? j.error.code ?? 503, typeof j.error === "string" ? j.error : j.error.message ?? ""); toast.error(message); showErr(message); return; }
           const delta = j.choices?.[0]?.delta?.content;
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }
@@ -644,7 +646,7 @@ function ChatPage() {
   return (
     <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground">
       <aside
-        className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 flex-col border-r border-border/50 bg-background md:static md:flex`}
+        className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-border/50 bg-background md:static md:flex`}
       >
         <div className="flex items-center gap-3 p-4">
           <Logo size={32} />
@@ -739,17 +741,18 @@ function ChatPage() {
         {callOpen && <VoiceCallDialog onClose={() => setCallOpen(false)} />}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
-          <span className="truncate font-display text-lg text-primary">আল আহসান এআই</span>
-          <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-display text-lg text-primary">আল আহসান এআই</span>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {msgs.length > 0 && (<>
-            <button onClick={() => printChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="প্রিন্ট / PDF" title="প্রিন্ট / PDF"><Printer size={16} /></button>
-            <button onClick={() => downloadChat(msgs)} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডাউনলোড" title="ডাউনলোড"><Download size={16} /></button>
+            <Button variant="ghost" size="icon" onClick={() => printChat(msgs)} className="hidden sm:inline-flex" aria-label="প্রিন্ট / PDF" title="প্রিন্ট / PDF"><Printer size={16} /></Button>
+            <Button variant="ghost" size="icon" onClick={() => downloadChat(msgs)} className="hidden sm:inline-flex" aria-label="ডাউনলোড" title="ডাউনলোড"><Download size={16} /></Button>
           </>)}
           <Popover>
             <PopoverTrigger asChild>
               <button className={`rounded-full border p-1.5 hover:text-primary ${mode || model ? "border-primary text-primary" : "border-border text-muted-foreground"}`} aria-label="সেটিংস" title="সেটিংস"><SettingsIcon size={16} /></button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-3">
+              {msgs.length > 0 && <div className="flex gap-2 sm:hidden"><Button variant="outline" onClick={() => printChat(msgs)}><Printer />PDF</Button><Button variant="outline" onClick={() => downloadChat(msgs)}><Download />ডাউনলোড</Button></div>}
               <label className="block text-xs text-muted-foreground">কাজের ধরন
                 <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">সাধারণ</option>{MODES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
               </label>
@@ -768,10 +771,10 @@ function ChatPage() {
           </div>
         </header> 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-6 sm:py-6">
 
             {msgs.length === 0 && (
-              <div className="mt-20 flex flex-col items-center text-center">
+              <div className="mt-8 flex flex-col items-center text-center sm:mt-20">
                 <Logo size={64} />
                 <h2 className="mt-4 font-display text-3xl">{cfg.welcome_title || "আসসালামু আলাইকুম"}</h2>
                 <p className="mt-2 text-muted-foreground">{cfg.welcome_subtitle || "আজ আমি কীভাবে সাহায্য করতে পারি? লিখুন অথবা মাইক চেপে বলুন।"}</p>
@@ -790,7 +793,7 @@ function ChatPage() {
                     <>
                       {((m.images && m.images.length > 0) ? m.images : m.image ? [m.image] : []).length > 0 && (
   <div className="mb-2 flex flex-wrap gap-2">
-    {((m.images && m.images.length > 0) ? m.images : [m.image!]).map((src, idx) => (
+    {((m.images && m.images.length > 0) ? m.images : m.image ? [m.image] : []).map((src, idx) => (
       <img key={idx} src={src} alt={`ছবি ${idx + 1}`} className="max-h-40 rounded-lg border border-border object-cover" />
     ))}
   </div>
@@ -846,7 +849,7 @@ function ChatPage() {
             <div ref={endRef} />
           </div>
         </div>
-        <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="shrink-0 border-t border-border/60 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4">
           {/* সংযুক্ত ছবি ও ফাইলের প্রিভিউ */}
           {(doc || docBusy || images.length > 0) && (
             <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -911,7 +914,7 @@ function ChatPage() {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
               rows={1}
               placeholder={listening ? "শুনছি…" : "আপনার প্রশ্ন লিখুন…"}
               className="max-h-48 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 outline-none placeholder:text-muted-foreground"
