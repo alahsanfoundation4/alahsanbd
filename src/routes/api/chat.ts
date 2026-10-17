@@ -169,14 +169,6 @@ async function handleChat(request: Request): Promise<Response> {
             return new Response(`আজকের সীমা (${s?.daily_limit ?? 150}টি প্রশ্ন) শেষ। আগামীকাল আবার চেষ্টা করুন।`, { status: 429 });
         }
         void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
-        const memP = (async () => {
-          const mem = await import("@/lib/memory.server");
-          const [items, rec] = await Promise.all([
-            mem.loadMemory(uid, 60),
-            supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15),
-          ]);
-          return { items, recent: rec.data };
-        })().catch((e) => { console.error("memory load failed", e); return { items: [] as { text: string }[], recent: null }; });
 
         const provider = (s?.provider ?? "lovable") as Provider;
         const stored = (s?.model || "").trim();
