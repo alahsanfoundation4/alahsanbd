@@ -7,6 +7,9 @@ import remarkGfm from "remark-gfm";
 import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu, Square, Copy, Check, Search, Printer, Download, Maximize2, Code2, MonitorPlay, ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, BookmarkCheck, Share2, Globe, Sparkles, Brain, CheckCircle2, Loader2, Moon, Sun, Play, Pencil, Pin, PinOff, Archive, ArchiveRestore, RotateCcw } from "lucide-react";
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
+import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
+import { Button } from "@/components/ui/button";
+import { Phone } from "lucide-react";
 
 import { extractDocText, loadBookmarks, saveBookmarks, downloadShareCard, type Bookmark } from "@/lib/extras";
 import { ChartBlock } from "@/components/ChartBlock";
@@ -306,6 +309,7 @@ function ChatPage() {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>("");
   const [mode, setMode] = useState<string>("");
+  const [callOpen, setCallOpen] = useState(false);
   useEffect(() => { setMode(localStorage.getItem("ahsan-mode") || ""); }, []);
   useEffect(() => { setModel(localStorage.getItem("ahsan-model") ?? ""); }, []);
     const [images, setImages] = useState<string[]>([]);
@@ -728,6 +732,7 @@ function ChatPage() {
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
       <main className="bg-background flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        {callOpen && <VoiceCallDialog onClose={() => setCallOpen(false)} />}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
           <span className="truncate font-display text-lg text-primary">আল আহসান এআই</span>
@@ -884,6 +889,7 @@ function ChatPage() {
                 <button className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="আরও অপশন"><Plus size={22} /></button>
               </PopoverTrigger>
               <PopoverContent side="top" align="start" className="w-56 p-1">
+                <Button variant="ghost" className="w-full justify-start gap-3 px-3" disabled={loading || listening} onClick={() => { setPlusOpen(false); setCallOpen(true); }}><Phone className="text-primary" />ভয়েস কল</Button>
                 {[
                   { icon: <Camera size={18} />, label: "সরাসরি ক্যামেরা", run: () => setCamOpen(true) },
                   { icon: <ImagePlus size={18} />, label: "ছবি যুক্ত করুন", run: () => fileRef.current?.click() },
