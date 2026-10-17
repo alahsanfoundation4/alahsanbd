@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { groupVoiceTranscripts } from "./voice-transcripts";
 
 import {
   connectLive,
@@ -91,6 +92,7 @@ export function handleLiveRequest(request: Request): Response {
 
 const conversationInstructions = `আপনি আল আহসান এআই, একজন বন্ধুসুলভ ও নির্ভরযোগ্য বাংলা সহকারী।
 বাংলাদেশের স্বাভাবিক বাংলা ভাষায় সংক্ষেপে সরাসরি উত্তর দিন। অনিশ্চিত তথ্য অনুমান করে নিশ্চিত বলবেন না।
+প্রথমেই আসল উত্তর দিন; অপ্রয়োজনীয় ভূমিকা, প্রশ্নের পুনরাবৃত্তি বা বারবার অপেক্ষার ঘোষণা করবেন না। ব্যাখ্যা দরকার হলে মূল উত্তরের পর প্রয়োজনীয় যুক্তি দিন; নির্ভুলতা ও জ্ঞান কমাবেন না।
 Backchannel policy: স্বাভাবিকভাবে অল্প শ্রবণ-সংকেত দিন, ব্যবহারকারীর কথা দখল করবেন না।
 Interruption policy: ব্যবহারকারী বাধা দিলে বলা থামিয়ে শুনুন; নতুন সংশোধন অনুযায়ী উত্তর দিন।
 Delegation policy:
@@ -327,7 +329,7 @@ export function bindLiveConnection(
         controller.signal,
         () => {
           const updates = transcripts.slice(transcriptCursor);
-          backendMessages.push(...updates.map(({ role, text }) => ({ role, content: text })));
+          backendMessages.push(...groupVoiceTranscripts(updates));
           transcriptCursor = transcripts.length;
           taskRevision = revision;
         },

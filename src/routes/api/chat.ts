@@ -174,6 +174,8 @@ async function handleChat(request: Request): Promise<Response> {
           ]);
           return { items, recent: rec.data };
         })().catch((e) => { console.error("memory load failed", e); return { items: [] as { text: string }[], recent: null }; });
+        // Begin local URL extraction now; fetch only after settings permit URL reading.
+        const linkedText = /https?:\/\//.test(lastMsgText) ? lastMsgText : "";
         // দ্রুততার জন্য সব প্রস্তুতি একসাথে (সমান্তরালে)
         const hourAgo = new Date(Date.now() - 3600_000).toISOString();
         const dayAgo = new Date(Date.now() - 86400_000).toISOString();
@@ -192,6 +194,7 @@ async function handleChat(request: Request): Promise<Response> {
             return new Response(`আজকের সীমা (${s?.daily_limit ?? 150}টি প্রশ্ন) শেষ। আগামীকাল আবার চেষ্টা করুন।`, { status: 429 });
         }
         void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
+        const linkedPagesP = s?.url_reader !== false && linkedText ? readUrls(linkedText) : Promise.resolve("");
 
         const provider = (s?.provider ?? "lovable") as Provider;
         const stored = (s?.model || "").trim();
@@ -252,7 +255,7 @@ async function handleChat(request: Request): Promise<Response> {
         if (s?.url_reader !== false) {
           const last = textMsgs[textMsgs.length - 1];
           if (last && /https?:\/\//.test(last.content)) {
-            const web = await readUrls(String(last.content ?? ""));
+            const web = await linkedPagesP;
             if (web) textMsgs[textMsgs.length - 1] = { role: last.role, content: `${last.content}\n\n=== ওয়েব পেজের লেখা ===\n${web}` };
           }
         }
