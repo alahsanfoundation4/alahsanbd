@@ -1,5 +1,11 @@
 # Al-Ahsan AI roadmap
 
+- [ ] Harden database/storage owner access and resolve verified critical findings
+- [ ] Verify voice interruption and improve mobile audio/background recovery without bypassing heartbeat deadlines
+- [ ] Show safe Bengali credit/quota/service failures without blind paid retries
+- [ ] Improve signup confirmation and password recovery reliability
+- [ ] Polish small-screen chat/navigation and verify desktop/mobile flows
+
 - [x] Removed feminine call choices and enforce masculine-only startup, including obsolete client choices; signed-in call plays nonzero audio and releases it on Stop; eight tests pass
 - [ ] Broader capability expansion — needs concrete scope; existing remaining areas include workspace/builders and full security/mobile/release verification; no claim of assistant-equivalent intelligence
 
