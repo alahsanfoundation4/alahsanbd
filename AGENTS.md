@@ -15,4 +15,4 @@
 - Live voice uses the shared persistent SDK relay in development and the Worker server entry in production; authenticate app.start before any paid session and retain heartbeat/Stop/final-usage cleanup.
 - Voice UI owns the useLiveVoice hook and mounted audio element for the full call; captions must not recreate media connections.
 - Latency optimizations overlap independent preparation and consolidate adjacent voice fragments without dropping context; preserve model selection, reasoning budgets, search, access checks, and call lifecycle timers.
-- Voice selection is allowlisted on the server and fixed per call; users choose before starting, never reconnect automatically to change a voice.
+- Voice policy is enforced by a shared server resolver and fixed per call; obsolete or arbitrary client choices cannot bypass it, and no automatic reconnection changes voices.

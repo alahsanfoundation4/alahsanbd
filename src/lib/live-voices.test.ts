@@ -3,7 +3,8 @@ import { resolveLiveVoice } from "./live-voices";
 it("uses the supported masculine voice when selected", () => {
   expect(resolveLiveVoice("meridian")).toBe("meridian");
 });
-it("preserves the previous voice by default and rejects arbitrary voices", () => {
-  expect(resolveLiveVoice(undefined)).toBe("marin");
-  expect(resolveLiveVoice("untrusted-voice")).toBe("marin");
+it("always uses a masculine voice, including old feminine choices and missing input", () => {
+  expect(resolveLiveVoice(undefined)).toBe("meridian");
+  expect(resolveLiveVoice("marin")).toBe("meridian");
+  expect(resolveLiveVoice("untrusted-voice")).toBe("meridian");
 });
