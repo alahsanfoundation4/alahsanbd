@@ -126,6 +126,25 @@ export const Route = createFileRoute("/api/chat")({
     },
   },
 });
+// সার্ভার মেমোরি ক্যাশ (৬০ সেকেন্ডের জন্য ai_settings ও ai_keys সংরক্ষণ)
+let cachedSettings: { data: any; time: number } | null = null;
+let cachedKeys: { data: any; time: number } | null = null;
+
+async function getCachedSettingsAndKeys(supabaseAdmin: any) {
+  const now = Date.now();
+  const needSettings = !cachedSettings || now - cachedSettings.time > 60_000;
+  const needKeys = !cachedKeys || now - cachedKeys.time > 60_000;
+
+  const [sRes, kRes] = await Promise.all([
+    needSettings ? supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedSettings!.data }),
+    needKeys ? supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedKeys!.data }),
+  ]);
+
+  if (needSettings && sRes.data) cachedSettings = { data: sRes.data, time: now };
+  if (needKeys && kRes.data) cachedKeys = { data: kRes.data, time: now };
+
+  return { s: sRes.data ?? cachedSettings?.data, keys: kRes.data ?? cachedKeys?.data };
+}
 
 async function handleChat(request: Request): Promise<Response> {
         const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
