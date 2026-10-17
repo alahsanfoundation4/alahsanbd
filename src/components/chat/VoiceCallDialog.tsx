@@ -13,9 +13,10 @@ export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
   const call = useLiveVoice({ onEvent(event) {
     if (event.type === "gateway.session.created") setCreated(true);
     if (event.type === "app.delegation.pending") setThinking(true);
-    if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
+    const delta = event["delta"];
+    if (event.type === "session.output_transcript.delta" && typeof delta === "string") {
       setThinking(false);
-      setCaption(previous => (previous + event.delta).slice(-1800));
+      setCaption(previous => (previous + delta).slice(-1800));
     }
     if (event.type === "session.input_transcript.delta") setCaption("");
     if (typeof event.usage?.seconds === "number" && Number.isFinite(event.usage.seconds)) setUsage(event.usage.seconds);
