@@ -197,12 +197,13 @@ async function handleChat(request: Request): Promise<Response> {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
-        // নির্বাচিত সেবার কী না থাকলে বিল্ট-ইন এআই দিয়ে উত্তর (চ্যাট বন্ধ হয়ে যায় না)
-        // দ্রুত পথ: সাধারণ প্রশ্নে সবসময় দ্রুততম বিল্ট-ইন পথ (Google-এর ভিড়/503-এ আটকে না থেকে)
-        if (isQuick && process.env["LOVABLE_API_KEY"]) {
-          url = "https://ai.gateway.lovable.dev/v1/chat/completions";
-          key = process.env["LOVABLE_API_KEY"];
-          model = "google/gemini-3-flash-preview";
+        // নিজস্ব Google কী থাকলে সরাসরি Google (মাপা প্রথম টোকেন ~২.৮ সে.); বিল্ট-ইন পথ শুধু ব্যাকআপ
+        const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+        if (ownGoogle && !picked && provider !== "openai") {
+          url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+          key = ownGoogle;
+          model = "gemini-3.8-flash";
+          provider = "google";
         } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
