@@ -177,9 +177,8 @@ async function handleChat(request: Request): Promise<Response> {
         // দ্রুততার জন্য সব প্রস্তুতি একসাথে (সমান্তরালে)
         const hourAgo = new Date(Date.now() - 3600_000).toISOString();
         const dayAgo = new Date(Date.now() - 86400_000).toISOString();
-        const [{ data: s }, { data: keys }, { data: isAdmin }, { count: h }, { count: d }] = await Promise.all([
-          supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle(),
-          supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle(),
+                const [{ s, keys }, { data: isAdmin }, { count: h }, { count: d }] = await Promise.all([
+          getCachedSettingsAndKeys(supabaseAdmin),
           supabaseAdmin.rpc("has_role", { _user_id: uid, _role: "admin" }),
           supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", hourAgo),
           supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", dayAgo),
