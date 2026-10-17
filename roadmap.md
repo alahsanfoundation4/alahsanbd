@@ -1,6 +1,6 @@
 # Al-Ahsan AI roadmap
 
-- [ ] Current request: remove feminine call voices and enforce masculine-only startup; verify call and tests
+- [x] Removed feminine call choices and enforce masculine-only startup, including obsolete client choices; signed-in call plays nonzero audio and releases it on Stop; eight tests pass
 - [ ] Broader capability expansion — needs concrete scope; existing remaining areas include workspace/builders and full security/mobile/release verification; no claim of assistant-equivalent intelligence
 
 - [x] Added allowlisted masculine voice selector before Start; signed-in male-voice call returned Bengali mathematical answer with playing nonzero audio, mute/unmute and released audio after Stop; eight tests pass; model/effort/caps unchanged
