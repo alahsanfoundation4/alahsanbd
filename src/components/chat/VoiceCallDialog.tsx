@@ -4,13 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
 import { useLiveVoice } from "@/hooks/use-live-voice";
+import { LIVE_VOICES, resolveLiveVoice, type LiveVoice } from "@/lib/live-voices";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
   const [caption, setCaption] = useState("");
   const [usage, setUsage] = useState<number | null>(null);
   const [created, setCreated] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const call = useLiveVoice({ onEvent(event) {
+  const [voice, setVoice] = useState<LiveVoice>("marin");
+  const call = useLiveVoice({ voice, onEvent(event) {
     if (event.type === "gateway.session.created") setCreated(true);
     if (event.type === "app.delegation.pending") setThinking(true);
     const delta = event["delta"];
@@ -30,6 +33,10 @@ export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col items-center gap-5 py-5">
         <Logo size={80} />
         <p role="status" className="text-lg font-medium">{status}</p>
+        <Select value={voice} onValueChange={value => setVoice(resolveLiveVoice(value))} disabled={!canStart}>
+          <SelectTrigger aria-label="কণ্ঠ নির্বাচন" className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>{LIVE_VOICES.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
         <div className="h-32 w-full overflow-y-auto text-center text-sm leading-relaxed text-muted-foreground" aria-live="polite">{caption}</div>
         {call.error && <p role="alert" className="w-full break-words text-sm text-destructive">{call.error}</p>}
         <div className="flex items-center justify-center gap-3">

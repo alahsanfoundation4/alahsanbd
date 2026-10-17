@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { LiveVoice } from "@/lib/live-voices";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type LiveEvent = {
@@ -32,6 +33,7 @@ const initialState: LiveState = {
 export function useLiveVoice(
   options: {
     url?: string;
+    voice?: LiveVoice;
     onEvent?: (event: LiveEvent) => void | Promise<void>;
   } = {},
 ) {
@@ -72,6 +74,7 @@ export function useLiveVoice(
     }
     const voice = createLiveVoice({
       url: endpoint.href,
+      voice: latest.current.voice ?? "marin",
       audio,
       onEvent(event) {
         if (!mounted.current || controller.current !== voice) return;
@@ -122,6 +125,7 @@ export function useLiveVoice(
 
 type LiveOptions = {
   url: string;
+  voice: LiveVoice;
   audio: HTMLAudioElement;
   onEvent: (event: LiveEvent) => void;
 };
@@ -356,7 +360,7 @@ function createLiveVoice(options: LiveOptions) {
       deadline = setTimeout(() => fail("Voice session did not start"), 50_000);
       socket.onopen = () => {
         if (!starting()) return release();
-        send({ type: "app.start", sdp, accessToken });
+        send({ type: "app.start", sdp, accessToken, voice: options.voice });
       };
       socket.onmessage = ({ data }) => {
         try {
