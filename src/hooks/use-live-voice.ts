@@ -74,7 +74,7 @@ export function useLiveVoice(
     }
     const voice = createLiveVoice({
       url: endpoint.href,
-      voice: latest.current.voice ?? "marin",
+      voice: latest.current.voice ?? "meridian",
       audio,
       onEvent(event) {
         if (!mounted.current || controller.current !== voice) return;
