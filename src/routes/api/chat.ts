@@ -243,9 +243,15 @@ async function handleChat(request: Request): Promise<Response> {
         if (s?.site_builder === false) system += "\n\nএখন ওয়েবসাইট তৈরির সুবিধা বন্ধ আছে।";
         
         const textMsgs = parsed.data.messages.map((m) => ({ role: m.role, content: m.content }));
+        // Independent search and memory preparation run concurrently; preserve search coverage and timeout.
+        const searchText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        const searchP = needsSearch(searchText) ? Promise.race([
+          webSearch(searchText).catch(() => ""),
+          new Promise<string>((resolve) => setTimeout(() => resolve(""), 6000)),
+        ]) : null;
         if (s?.url_reader !== false) {
           const last = textMsgs[textMsgs.length - 1];
-          if (last) {
+          if (last && /https?:\/\//.test(last.content)) {
             const web = await readUrls(String(last.content ?? ""));
             if (web) textMsgs[textMsgs.length - 1] = { role: last.role, content: `${last.content}\n\n=== ওয়েব পেজের লেখা ===\n${web}` };
           }
@@ -302,10 +308,7 @@ async function handleChat(request: Request): Promise<Response> {
         // Live web search for online/current questions
         if (needsSearch(lastUser)) {
           stages.push("search");
-          const found = await Promise.race([
-            webSearch(lastUser).catch(() => ""),
-            new Promise<string>((r) => setTimeout(() => r(""), 6000)),
-          ]);
+          const found = await searchP;
           if (found) stages.push("verify");
           system += found
             ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
@@ -455,11 +458,10 @@ async function safeFetch(url: string): Promise<Response> {
 async function readUrls(text: string): Promise<string> {
   const urls = text.match(/https?:\/\/[^\s<>"')]+/g) || [];
   if (!urls.length) return "";
-  const out: string[] = [];
-  for (const u of urls.slice(0, 2)) {
+  const out = await Promise.all(urls.slice(0, 2).map(async (u) => {
     try {
       const r = await safeFetch(u);
-      if (!r.ok) continue;
+      if (!r.ok) return "";
       const html = await r.text();
       const clean = html
         .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -468,10 +470,10 @@ async function readUrls(text: string): Promise<string> {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 4000);
-      if (clean) out.push(`[${u}]\n${clean}`);
-    } catch {}
-  }
-  return out.join("\n\n");
+      return clean ? `[${u}]\n${clean}` : "";
+    } catch { return ""; }
+  }));
+  return out.filter(Boolean).join("\n\n");
 }
 
 const enc = new TextEncoder();
