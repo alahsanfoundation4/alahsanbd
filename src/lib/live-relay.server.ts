@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { groupVoiceTranscripts } from "./voice-transcripts";
+import { resolveLiveVoice } from "./live-voices";
 
 import {
   connectLive,
@@ -440,7 +441,7 @@ export function bindLiveConnection(
     }
   }
 
-  async function startSession(sdp: string, token: unknown) {
+  async function startSession(sdp: string, token: unknown, voice: unknown) {
     if (closing || browser.readyState !== 1) return;
     clearTimeout(startTimer);
     if (typeof token !== "string" || !token.trim()) throw new Error("ভয়েস কলের জন্য লগইন করুন।");
@@ -453,7 +454,7 @@ export function bindLiveConnection(
         session: {
           model: config.liveModel,
           instructions: conversationInstructions,
-          audio: { output: { voice: "marin" } },
+          audio: { output: { voice: resolveLiveVoice(voice) } },
           delegation: { type: "client" },
         },
         transport: { type: "webrtc", sdp },
@@ -490,7 +491,7 @@ export function bindLiveConnection(
         }
         starting = true;
         execution.waitUntil(
-          startSession(event.sdp, event.accessToken).catch((error) => {
+          startSession(event.sdp, event.accessToken, event.voice).catch((error) => {
             if (!closing)
               emit({
                 type: "app.error",
