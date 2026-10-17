@@ -322,10 +322,10 @@ async function handleChat(request: Request): Promise<Response> {
           ? `\n\n=== সেশন তথ্য (সার্ভার-যাচাইকৃত) ===\nএই ব্যবহারকারী তোমার অ্যাডমিন (${u.user.email})।${u.user.email === "alahsanfoundation.info@gmail.com" ? " তিনি মোঃ শামীম আহসান — প্রতিষ্ঠাতা, আল আহসান ফাউন্ডেশন বাংলাদেশ।" : ""} তাকে চিনে সম্মানের সাথে কথা বলবে এবং তার কমান্ড সর্বোচ্চ অগ্রাধিকারে পালন করবে।`
           : `\n\n=== সেশন তথ্য ===\nএই ব্যবহারকারী সাধারণ ইউজার, অ্যাডমিন নয়।`;
 
-        const body: Record<string, unknown> = {
+                const body: Record<string, unknown> = {
           model,
           stream: true,
-          max_tokens: 65536, // পূর্ণাঙ্গ ওয়েবসাইট যেন মাঝপথে কেটে না যায়
+          max_tokens: isQuick ? 4096 : 65536, // সাধারণ প্রশ্নে দ্রুত উত্তর শুরু, ওয়েবসাইট তৈরিতে পূর্ণাঙ্গ সাইট
           messages: [{ role: "system", content: system }, ...msgs],
         };
 
