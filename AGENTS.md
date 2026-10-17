@@ -14,3 +14,4 @@
 - Backup API key pool is capped at 2 and deduplicated on save; keys are only read server-side for AI calls.
 - Live voice uses the shared persistent SDK relay in development and the Worker server entry in production; authenticate app.start before any paid session and retain heartbeat/Stop/final-usage cleanup.
 - Voice UI owns the useLiveVoice hook and mounted audio element for the full call; captions must not recreate media connections.
+- Latency optimizations overlap independent preparation and consolidate adjacent voice fragments without dropping context; preserve model selection, reasoning budgets, search, access checks, and call lifecycle timers.

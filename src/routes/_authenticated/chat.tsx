@@ -497,10 +497,13 @@ function ChatPage() {
     setInput("");
     setImages([]);
     setDoc(null);
+    // Session refresh and conversation creation are independent; start them together.
+    setLoading(true);
+    const sessionP = supabase.auth.getSession();
     let convId = active;
     if (!convId) {
       const { data, error } = await supabase.from("conversations").insert({ title: text.slice(0, 60), user_id: user.id }).select("id").single();
-      if (error || !data) { setInput(text); alert(`কথোপকথন তৈরি করা যায়নি: ${error?.message ?? ""}`); return; }
+      if (error || !data) { setInput(typed); setImages(imgs); setDoc(d); setLoading(false); alert(`কথোপকথন তৈরি করা যায়নি: ${error?.message ?? ""}`); return; }
       convId = data.id;
       setActive(convId);
     }
@@ -508,7 +511,8 @@ function ChatPage() {
     const history: Msg[] = [...cur.filter((m) => !m.error && m.content.trim()), { role: "user", content: text, ...imgPayload }];
     // ভার্সন সিস্টেম: এই চ্যাটে আগের ওয়েবসাইট থাকলে সেটিকেই ভিত্তি ধরে শুধু চাওয়া পরিবর্তন
     const siteMsgs = cur.filter((m) => m.role === "assistant" && /```html/i.test(m.content));
-    const prevSite = siteMsgs.length ? [...siteMsgs[siteMsgs.length - 1]!.content.matchAll(/```html\s*\n([\s\S]*?)```/gi)].map((x) => x[1]).join("\n") : "";
+    const prevSiteMessage = siteMsgs.at(-1);
+    const prevSite = prevSiteMessage ? [...prevSiteMessage.content.matchAll(/```html\s*\n([\s\S]*?)```/gi)].map((x) => x[1]).join("\n") : "";
     const siteVersion = siteMsgs.length + 1;
     setMsgs([...cur, { role: "user", content: text, ...imgPayload }, { role: "assistant", content: "" }]);
     setFlow({ stages: ["think"], current: 0 });
@@ -527,7 +531,7 @@ function ChatPage() {
     let wrote = false;
     const showErr = (msg: string) => { failed = true; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full ? `${full}\n\n${msg}` : msg, error: true }]); };
     try {
-      const { data: s } = await supabase.auth.getSession();
+      const { data: s } = await sessionP;
       abortRef.current = new AbortController();
       // টোকেন বাঁচাতে: শুধু শেষ ৮টি বার্তা; পুরোনো বড় বার্তা ছোট করে পাঠানো
       const res = await fetch("/api/chat", {
@@ -616,9 +620,9 @@ function ChatPage() {
           }
         } catch { full += "\n\nলাইভ লিংক তৈরির সময় সংযোগ বিচ্ছিন্ন হয়েছে।"; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
       }
+      if (voiceOut) speak(full);
       await supabase.from("messages").insert({ conversation_id: convId, role: "assistant", content: full, user_id: user.id });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
-      if (voiceOut) speak(full);
       supabase.auth.getSession().then(({ data: s3 }) =>
         fetch("/api/memory", {
           method: "POST",
