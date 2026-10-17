@@ -160,12 +160,17 @@ async function handleChat(request: Request): Promise<Response> {
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const uid = u.user.id;
-        // মেমোরি লোড সেটিংসের সাথেই সমান্তরালে শুরু
+                // মেমোরি লোড: ছোট প্রশ্নে অতিরিক্ত ১৫টি পুরোনো মেসেজ কুয়েরি স্কিপ করে সময় বাঁচানো
+        const lastMsgText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        const isQuickCheck = lastMsgText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|অংক|গণিত|ওয়েবসাইট|website/i.test(lastMsgText);
+
         const memP = (async () => {
           const mem = await import("@/lib/memory.server");
           const [items, rec] = await Promise.all([
             mem.loadMemory(uid, 60),
-            supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15),
+            isQuickCheck
+              ? Promise.resolve({ data: null })
+              : supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15),
           ]);
           return { items, recent: rec.data };
         })().catch((e) => { console.error("memory load failed", e); return { items: [] as { text: string }[], recent: null }; });
