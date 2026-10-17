@@ -197,12 +197,12 @@ async function handleChat(request: Request): Promise<Response> {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
-        // নির্বাচিত সেবার কী না থাকলে বিল্ট-ইন এআই দিয়ে উত্তর (চ্যাট বন্ধ হয়ে যায় না)
-        // দ্রুত পথ: সাধারণ প্রশ্নে সবসময় দ্রুততম বিল্ট-ইন পথ (Google-এর ভিড়/503-এ আটকে না থেকে)
-        if (isQuick && process.env["LOVABLE_API_KEY"]) {
-          url = "https://ai.gateway.lovable.dev/v1/chat/completions";
-          key = process.env["LOVABLE_API_KEY"];
-          model = "google/gemini-3-flash-preview";
+        // নিজস্ব Google কী থাকলে সরাসরি Google (মাপা প্রথম টোকেন ~২.৮ সে.); বিল্ট-ইন পথ শুধু ব্যাকআপ
+        const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+        if (ownGoogle && !picked && provider !== "openai") {
+          url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+          key = ownGoogle;
+          model = "gemini-3.8-flash";
         } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
@@ -331,7 +331,7 @@ async function handleChat(request: Request): Promise<Response> {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
           // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
           const ac = new AbortController();
-          const timer = setTimeout(() => ac.abort(), isQuick ? 10000 : a.url.includes("generativelanguage") ? 8000 : attempts.length > 1 ? 20000 : 45000);
+          const timer = setTimeout(() => ac.abort(), isQuick && !a.url.includes("generativelanguage") ? 10000 : a.url.includes("generativelanguage") ? 15000 : attempts.length > 1 ? 20000 : 45000);
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
@@ -375,7 +375,7 @@ function pick(a: string[]): string {
 
 function friendlyError(status: number, text: string): string {
   const t = text.toLowerCase();
-  const billing = /insufficient[_ ]?(credit|balance|funds)|billing|payment required|credit balance|out of credits/.test(t) && !/rate|per minute|requests per/.test(t);
+  const billing = status === 402 || /insufficient[_ ]?(credit|balance|funds)|billing|payment required|credit balance|out of credits/.test(t) && !/rate|per minute|requests per/.test(t);
   if (billing) return "এআই সেবার অ্যাকাউন্টে ব্যালান্স বা বিলিং সমস্যার কথা জানিয়েছে। অ্যাডমিন প্যানেলে কী-টি যাচাই করুন বা অন্য কী যোগ করুন।";
   if (status === 429 || /rate.?limit|too many requests|resource_exhausted|quota/.test(t))
     return pick([
