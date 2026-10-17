@@ -141,6 +141,15 @@ async function handleChat(request: Request): Promise<Response> {
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const uid = u.user.id;
+        // মেমোরি লোড সেটিংসের সাথেই সমান্তরালে শুরু
+        const memP = (async () => {
+          const mem = await import("@/lib/memory.server");
+          const [items, rec] = await Promise.all([
+            mem.loadMemory(uid, 60),
+            supabaseAdmin.from("messages").select("content,created_at").eq("user_id", uid).eq("role", "user").order("created_at", { ascending: false }).limit(15),
+          ]);
+          return { items, recent: rec.data };
+        })().catch((e) => { console.error("memory load failed", e); return { items: [] as { text: string }[], recent: null }; });
         // দ্রুততার জন্য সব প্রস্তুতি একসাথে (সমান্তরালে)
         const hourAgo = new Date(Date.now() - 3600_000).toISOString();
         const dayAgo = new Date(Date.now() - 86400_000).toISOString();
@@ -202,7 +211,8 @@ async function handleChat(request: Request): Promise<Response> {
         if (ownGoogle && !picked && provider !== "openai") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = ownGoogle;
-          model = "gemini-3.8-flash";
+          // সাধারণ প্রশ্নে flash-lite (মাপা প্রথম টোকেন ~০.৭–০.৯ সে.); কোড/ওয়েবসাইট/জটিল কাজে 3.8-flash
+          model = isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
         } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
