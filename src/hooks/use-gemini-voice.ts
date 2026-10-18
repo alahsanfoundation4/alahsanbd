@@ -32,6 +32,7 @@ export function useGeminiVoice({ onEvent }: { onEvent: (event: LiveEvent) => voi
     nextPlay.current = 0;
   }, []);
   const stop = useCallback(() => {
+    if (!active.current && !ctx.current && !session.current) return;
     active.current = false;
     generation.current++;
     session.current?.close(); session.current = null;
