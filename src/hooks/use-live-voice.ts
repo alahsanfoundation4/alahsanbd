@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { LiveVoice } from "@/lib/live-voices";
+import { voiceError } from "@/lib/service-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type LiveEvent = {
@@ -94,7 +95,7 @@ export function useLiveVoice(
         } else if (event.type === "app.playback.blocked" || event.type === "app.playback.resumed") {
           setCall((previous) => ({ ...previous, playbackBlocked: event.type === "app.playback.blocked" }));
         } else if (["app.error", "gateway.error", "error"].includes(event.type)) {
-          setCall((previous) => ({ ...previous, error: event.error?.message ?? "Voice request failed." }));
+          setCall((previous) => ({ ...previous, error: voiceError(event.error) }));
         }
         try {
           void Promise.resolve(latest.current.onEvent?.(event)).catch(() => {
@@ -169,6 +170,7 @@ function createLiveVoice(options: LiveOptions) {
     clearTimeout(deadline);
     cancelGathering?.();
     window.removeEventListener("pagehide", stop);
+    document.removeEventListener("visibilitychange", restoreAudio);
     stopAudio();
     channel?.close();
     peer?.close();
@@ -210,6 +212,12 @@ function createLiveVoice(options: LiveOptions) {
     } catch {
       if (state === "starting" || state === "active") options.onEvent({ type: "app.playback.blocked" });
     }
+  }
+
+  function restoreAudio() {
+    if (document.visibilityState !== "visible" || state !== "active") return;
+    pulse();
+    void resumePlayback();
   }
 
   function fail(message: string) {
@@ -305,6 +313,7 @@ function createLiveVoice(options: LiveOptions) {
     if (state !== "idle") return;
     state = "starting";
     window.addEventListener("pagehide", stop);
+    document.addEventListener("visibilitychange", restoreAudio);
     try {
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
