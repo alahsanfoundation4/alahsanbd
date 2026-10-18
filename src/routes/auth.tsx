@@ -63,6 +63,7 @@ function AuthPage() {
   }
 
   async function magicLink() {
+    if (busy) return;
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
     setBusy(true);
     try {
@@ -105,9 +106,13 @@ function AuthPage() {
   }
 
   async function google() {
+    if (busy) return;
+    setBusy(true);
+    try {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) toast.error("Google লগইন ব্যর্থ হয়েছে।");
     else if (!r.redirected) navigate({ to: "/chat" });
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   return (
@@ -130,7 +135,7 @@ function AuthPage() {
           </div>
         ) : (
           <>
-            <Button variant="outline" className="mt-6 w-full" onClick={google}>
+            <Button variant="outline" className="mt-6 w-full" disabled={busy} onClick={google}>
               Google দিয়ে চালিয়ে যান
             </Button>
             <div className="my-4 text-center text-xs text-muted-foreground">অথবা</div>

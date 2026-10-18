@@ -49,9 +49,11 @@ function Index() {
 
   const google = async () => {
     setBusy(true); setErr("");
+    try {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) { setErr("Google লগইন ব্যর্থ হয়েছে।"); setBusy(false); return; }
     if (!r.redirected) navigate({ to: "/chat" });
+    } catch (error) { setErr(authError(error)); } finally { setBusy(false); }
   };
 
   const submit = async (e: React.FormEvent) => {
