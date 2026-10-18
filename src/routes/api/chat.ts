@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
+import { serviceError } from "@/lib/service-errors";
 
 const Body = z.object({
   messages: z
@@ -374,9 +375,10 @@ async function handleChat(request: Request): Promise<Response> {
           const t = (await res.text()).slice(0, 500);
           realErr ??= { status: res.status, text: t };
           console.error(`Key "${a.label}" failed [${res.status}]: ${t.slice(0, 300)}`);
+          if ([402, 429, 502, 503, 504].includes(res.status)) break;
         }
 
-        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
+        if ((!res.ok || !res.body) && ![402, 429, 502, 503, 504].includes(realErr?.status ?? 0) && process.env["LOVABLE_API_KEY"]) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
           const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
           for (const gwModel of chain) {
@@ -405,6 +407,7 @@ function pick(a: string[]): string {
 }
 
 function friendlyError(status: number, text: string): string {
+  if ([402, 429, 503].includes(status)) return serviceError(status, text);
   const t = text.toLowerCase();
   const billing = status === 402 || /insufficient[_ ]?(credit|balance|funds)|billing|payment required|credit balance|out of credits/.test(t) && !/rate|per minute|requests per/.test(t);
   if (billing) return "এআই সেবার অ্যাকাউন্টে ব্যালান্স বা বিলিং সমস্যার কথা জানিয়েছে। অ্যাডমিন প্যানেলে কী-টি যাচাই করুন বা অন্য কী যোগ করুন।";

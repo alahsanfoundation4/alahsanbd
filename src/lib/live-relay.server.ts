@@ -339,7 +339,7 @@ export function bindLiveConnection(
       if (closing || controller.signal.aborted) return;
       if (taskRevision !== revision) return;
       deliverResult(id, answer.trim());
-    } catch {
+    } catch (error) {
       if (closing || controller.signal.aborted) return;
       backendMessages.push({
         role: "assistant",
@@ -347,7 +347,9 @@ export function bindLiveConnection(
           "The backend attempt failed. Completed tool results remain valid; verify uncertain external actions before any retry.",
       });
       if (taskRevision !== revision) return;
-      deliverResult(id, "উত্তরটি সম্পূর্ণ করা যায়নি। ব্যবহারকারী আবার চেষ্টা করতে চান কি না জিজ্ঞেস করুন।");
+      const message = voiceError(error);
+      emit({ type: "app.error", error: { message } });
+      deliverResult(id, message);
     } finally {
       if (task === controller) task = undefined;
       scheduleDelegation();

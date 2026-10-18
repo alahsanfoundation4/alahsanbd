@@ -4,6 +4,7 @@ import { BookOpen, Calculator, Languages, Code2 } from "lucide-react";
 import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
+import { authError } from "@/lib/auth-errors";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,25 +49,29 @@ function Index() {
 
   const google = async () => {
     setBusy(true); setErr("");
+    try {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) { setErr("Google লগইন ব্যর্থ হয়েছে।"); setBusy(false); return; }
     if (!r.redirected) navigate({ to: "/chat" });
+    } catch (error) { setErr(authError(error)); } finally { setBusy(false); }
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setErr(""); setInfo("");
+    try {
     if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
       setBusy(false);
-      if (error) setErr("লগইন ব্যর্থ: ইমেইল বা পাসওয়ার্ড ভুল।");
+      if (error) setErr(authError(error));
       else navigate({ to: "/chat" });
     } else {
       const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin } });
       setBusy(false);
-      if (error) setErr(error.message);
+      if (error) setErr(authError(error));
       else setInfo("আপনার ইমেইলে একটি নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে ক্লিক করে তারপর লগইন করুন।");
     }
+    } catch (error) { setErr(authError(error)); } finally { setBusy(false); }
   };
 
   return (

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import logo from "@/assets/logo.png";
+import { authError } from "@/lib/auth-errors";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -29,6 +30,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [linkKind, setLinkKind] = useState<"signup" | "magic">("signup");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -38,11 +40,13 @@ function AuthPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
+    try {
     if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) { toast.error("লগইন ব্যর্থ: ইমেইল বা পাসওয়ার্ড ভুল।"); return; }
+      if (error) { toast.error(authError(error)); return; }
       navigate({ to: "/chat" });
     } else {
       const { error } = await supabase.auth.signUp({
@@ -51,46 +55,64 @@ function AuthPage() {
         options: { emailRedirectTo: window.location.origin },
       });
       setBusy(false);
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error(authError(error)); return; }
+      setLinkKind("signup");
       setSent(true);
     }
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   async function magicLink() {
+    if (busy) return;
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
     setBusy(true);
+    try {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/chat`, shouldCreateUser: true },
+      options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
     });
     setBusy(false);
-    if (error) toast.error(error.message);
-    else { setSent(true); toast.success("লগইন লিংক আপনার ইমেইলে পাঠানো হয়েছে।"); }
+    if (error) toast.error(authError(error));
+    else { setLinkKind("magic"); setSent(true); toast.success("লগইন লিংক আপনার ইমেইলে পাঠানো হয়েছে।"); }
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   async function resend() {
+    if (busy) return;
+    if (linkKind === "magic") return magicLink();
+    setBusy(true);
+    try {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
       options: { emailRedirectTo: window.location.origin },
     });
-    if (error) await magicLink();
+    if (error) toast.error(authError(error));
     else toast.success("লিংক আবার পাঠানো হয়েছে।");
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   async function forgot() {
+    if (busy) return;
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
+    setBusy(true);
+    try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast.error(error.message);
+    if (error) toast.error(authError(error));
     else toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে।");
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   async function google() {
+    if (busy) return;
+    setBusy(true);
+    try {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (r.error) toast.error("Google লগইন ব্যর্থ হয়েছে।");
     else if (!r.redirected) navigate({ to: "/chat" });
+    } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
   return (
@@ -104,16 +126,16 @@ function AuthPage() {
         {sent ? (
           <div className="mt-6 space-y-3">
             <p className="rounded-lg bg-accent p-4 text-sm text-accent-foreground">
-              {email} ঠিকানায় একটি লিংক পাঠানো হয়েছে। লিংকে ক্লিক করলেই লগইন হয়ে যাবে। ইনবক্সে না পেলে Spam ফোল্ডার দেখুন।
+              {email} ঠিকানায় {linkKind === "signup" ? "ইমেইল নিশ্চিতকরণ" : "লগইন"} লিংক পাঠানো হয়েছে। ইনবক্সে না পেলে Spam ফোল্ডার দেখুন।
             </p>
-            <Button variant="outline" className="w-full" onClick={resend}>লিংক আবার পাঠান</Button>
+            <Button variant="outline" className="w-full" disabled={busy} onClick={resend}>লিংক আবার পাঠান</Button>
             <button type="button" className="w-full text-center text-sm text-muted-foreground hover:underline" onClick={() => setSent(false)}>
               অন্য ইমেইল ব্যবহার করুন
             </button>
           </div>
         ) : (
           <>
-            <Button variant="outline" className="mt-6 w-full" onClick={google}>
+            <Button variant="outline" className="mt-6 w-full" disabled={busy} onClick={google}>
               Google দিয়ে চালিয়ে যান
             </Button>
             <div className="my-4 text-center text-xs text-muted-foreground">অথবা</div>

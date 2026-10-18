@@ -16,3 +16,5 @@
 - Voice UI owns the useLiveVoice hook and mounted audio element for the full call; captions must not recreate media connections.
 - Latency optimizations overlap independent preparation and consolidate adjacent voice fragments without dropping context; preserve model selection, reasoning budgets, search, access checks, and call lifecycle timers.
 - Voice policy is enforced by a shared server resolver and fixed per call; obsolete or arbitrary client choices cannot bypass it, and no automatic reconnection changes voices.
+- Google-key voice uses authenticated server-minted single-use constrained Gemini tokens; permanent provider keys never leave the server for inference, and browser audio capture/playback stays in one call-owned hook.
+- Private image downloads require authenticated owner access; message writes require ownership of both message and parent conversation, and admin roles cannot be self-granted.

@@ -3,15 +3,12 @@ import { Mic, MicOff, Phone, PhoneOff, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
-import { useLiveVoice } from "@/hooks/use-live-voice";
+import { useGeminiVoice } from "@/hooks/use-gemini-voice";
 
 export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
   const [caption, setCaption] = useState("");
-  const [usage, setUsage] = useState<number | null>(null);
-  const [created, setCreated] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const call = useLiveVoice({ voice: "meridian", onEvent(event) {
-    if (event.type === "gateway.session.created") setCreated(true);
+  const call = useGeminiVoice({ onEvent(event) {
     if (event.type === "app.delegation.pending") setThinking(true);
     const delta = event["delta"];
     if (event.type === "session.output_transcript.delta" && typeof delta === "string") {
@@ -19,7 +16,6 @@ export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
       setCaption(previous => (previous + delta).slice(-1800));
     }
     if (event.type === "session.input_transcript.delta") setCaption("");
-    if (typeof event.usage?.seconds === "number" && Number.isFinite(event.usage.seconds)) setUsage(event.usage.seconds);
   } });
   const canStart = call.status === "idle" || call.status === "closed";
   const status = { idle: "ভয়েস কল", connecting: "সংযোগ হচ্ছে…", connected: thinking ? "প্রশ্ন বিশ্লেষণ করছি…" : "শুনছি…", stopping: "কল শেষ হচ্ছে…", closed: "কল শেষ হয়েছে" }[call.status];
@@ -33,13 +29,12 @@ export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
         <div className="h-32 w-full overflow-y-auto text-center text-sm leading-relaxed text-muted-foreground" aria-live="polite">{caption}</div>
         {call.error && <p role="alert" className="w-full break-words text-sm text-destructive">{call.error}</p>}
         <div className="flex items-center justify-center gap-3">
-          {canStart ? <Button onClick={() => { setCaption(""); setUsage(null); setCreated(false); setThinking(false); window.speechSynthesis?.cancel(); call.start(); }}><Phone />{call.status === "closed" ? "আবার কল করুন" : "কল শুরু করুন"}</Button> : <>
+          {canStart ? <Button onClick={() => { setCaption(""); setThinking(false); window.speechSynthesis?.cancel(); call.start(); }}><Phone />{call.status === "closed" ? "আবার কল করুন" : "কল শুরু করুন"}</Button> : <>
             <Button variant="outline" size="icon" disabled={call.status === "stopping"} onClick={() => call.setMuted(!call.muted)} aria-label={call.muted ? "মাইক চালু করুন" : "মাইক বন্ধ করুন"} title={call.muted ? "মাইক চালু করুন" : "মাইক বন্ধ করুন"}>{call.muted ? <MicOff /> : <Mic />}</Button>
             <Button variant="destructive" disabled={call.status === "stopping"} onClick={call.stop}><PhoneOff />কল শেষ করুন</Button>
           </>}
           {call.playbackBlocked && <Button variant="outline" onClick={call.resumePlayback}><Play />শুনুন</Button>}
         </div>
-        {created && <p className="text-xs text-muted-foreground">ভয়েস ব্যবহার: {Math.max(15, usage ?? 0).toLocaleString("bn-BD")} সেকেন্ড{call.status === "closed" && !call.finalized ? " — চূড়ান্ত হিসাব পাওয়া যায়নি" : ""}</p>}
       </div>
     </DialogContent>
   </Dialog>;
