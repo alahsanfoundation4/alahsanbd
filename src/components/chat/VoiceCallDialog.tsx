@@ -3,14 +3,14 @@ import { Mic, MicOff, Phone, PhoneOff, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
-import { useLiveVoice } from "@/hooks/use-live-voice";
+import { useGeminiVoice } from "@/hooks/use-gemini-voice";
 
 export function VoiceCallDialog({ onClose }: { onClose: () => void }) {
   const [caption, setCaption] = useState("");
   const [usage, setUsage] = useState<number | null>(null);
   const [created, setCreated] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const call = useLiveVoice({ voice: "meridian", onEvent(event) {
+  const call = useGeminiVoice({ onEvent(event) {
     if (event.type === "gateway.session.created") setCreated(true);
     if (event.type === "app.delegation.pending") setThinking(true);
     const delta = event["delta"];
