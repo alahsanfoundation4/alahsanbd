@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { GoogleGenAI, type Session, type LiveServerMessage } from "@google/genai";
 import { createGeminiLiveToken } from "@/lib/gemini-live.functions";
+import { geminiLiveConfig } from "@/lib/gemini-live-config";
 import { encodePcm, decodePcm } from "@/lib/pcm-audio";
 import { voiceError } from "@/lib/service-errors";
 import type { LiveEvent } from "./use-live-voice";
@@ -87,7 +88,7 @@ export function useGeminiVoice({ onEvent }: { onEvent: (event: LiveEvent) => voi
         }
         if (message.goAway) { setError("Google ভয়েস সেশনের সময় শেষ হচ্ছে। কল শেষ করে নতুন কল শুরু করুন।"); }
       };
-      const connection = await ai.live.connect({ model: token.model, config: token.config, callbacks: {
+      const connection = await ai.live.connect({ model: token.model, config: { ...geminiLiveConfig, systemInstruction: token.systemInstruction }, callbacks: {
         onmessage: receive,
         onerror: () => { if (valid()) { setError("Google ভয়েস সংযোগে সমস্যা হয়েছে। Google কী, বিলিং ও কোটা যাচাই করুন।"); stop(); } },
         onclose: event => { if (valid()) { setError(event.code === 1000 ? "Google ভয়েস কল শেষ হয়েছে।" : "Google ভয়েস সংযোগ বন্ধ হয়েছে। কী, কোটা ও ইন্টারনেট যাচাই করে নতুন কল করুন।"); stop(); } },

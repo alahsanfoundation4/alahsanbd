@@ -33,7 +33,7 @@ export const createGeminiLiveToken = createServerFn({ method: "POST" })
       } });
       if (!token.name) throw new Error("Google নিরাপদ ভয়েস টোকেন দেয়নি।");
       await supabaseAdmin.from("chat_usage").insert({ user_id: userId });
-      return { token: token.name, model: GEMINI_LIVE_MODEL, config };
+      return { token: token.name, model: GEMINI_LIVE_MODEL, systemInstruction: config.systemInstruction };
     } catch (error) {
       const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 503;
       throw new Error(voiceError({ httpStatus: status, message: error instanceof Error ? error.message : "" }));
