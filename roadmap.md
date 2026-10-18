@@ -1,5 +1,7 @@
 # Al-Ahsan AI roadmap
 
+- [ ] New request: use admin-owned Google Gemini key for hands-free voice without platform AI credits; keep key server-only, masculine voice, authenticated calls, explicit errors and cleanup
+
 - [ ] Harden database/storage owner access and resolve verified critical findings
 - [ ] Verify voice interruption and improve mobile audio/background recovery without bypassing heartbeat deadlines
 - [ ] Show safe Bengali credit/quota/service failures without blind paid retries
