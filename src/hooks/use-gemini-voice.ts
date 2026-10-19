@@ -110,7 +110,6 @@ export function useGeminiVoice({ onEvent }: { onEvent: (event: LiveEvent) => voi
       };
       media.getTracks().forEach(track => track.addEventListener("ended", stop));
       setStatus("connected");
-      connection.sendClientContent({ turns: [{ role: "user", parts: [{ text: "আসসালামু আলাইকুম।" }] }], turnComplete: true });
     } catch (failure) { if (valid()) { setError(voiceError(failure)); stop(); } }
   }, [clearPlayback, mint, stop]);
   const setMuted = (value: boolean) => { mutedRef.current = value; updateMuted(value); stream.current?.getAudioTracks().forEach(t => { t.enabled = !value; }); if (value) session.current?.sendRealtimeInput({ audioStreamEnd: true }); };

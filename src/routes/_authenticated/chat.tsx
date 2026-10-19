@@ -8,6 +8,7 @@ import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
+import { stripUnaskedSalam } from "@/lib/salam";
 import { Button } from "@/components/ui/button";
 import { serviceError } from "@/lib/service-errors";
 import { toast } from "sonner";
@@ -559,7 +560,8 @@ function ChatPage() {
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }
             full += delta;
-            setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
+            const shown = stripUnaskedSalam(full, apiText);
+            setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: shown }]);
           }
         } catch { /* অসম্পূর্ণ/ভাঙা অংশ বাদ */ }
       };
