@@ -5,6 +5,8 @@ export const geminiLiveConfig: LiveConnectConfig = {
   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Fenrir" } } },
   inputAudioTranscription: {},
   outputAudioTranscription: {},
+  // সাম্প্রতিক বা অজানা তথ্যের জন্য লাইভ গুগল সার্চ
+  tools: [{ googleSearch: {} }],
   realtimeInputConfig: {
     activityHandling: ActivityHandling.START_OF_ACTIVITY_INTERRUPTS,
     automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH },
