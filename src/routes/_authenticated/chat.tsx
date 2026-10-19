@@ -8,6 +8,7 @@ import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
+import { stripUnaskedSalam } from "@/lib/salam";
 import { Button } from "@/components/ui/button";
 import { serviceError } from "@/lib/service-errors";
 import { toast } from "sonner";
@@ -559,7 +560,8 @@ function ChatPage() {
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }
             full += delta;
-            setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
+            const shown = stripUnaskedSalam(full, apiText);
+            setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: shown }]);
           }
         } catch { /* অসম্পূর্ণ/ভাঙা অংশ বাদ */ }
       };
@@ -738,7 +740,6 @@ function ChatPage() {
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
       <main className="bg-background flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {callOpen && <VoiceCallDialog onClose={() => setCallOpen(false)} />}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
           <span className="min-w-0 flex-1 truncate font-display text-lg text-primary">আল আহসান এআই</span>
@@ -770,8 +771,9 @@ function ChatPage() {
           </button>
           </div>
         </header> 
+        {callOpen && <VoiceCallDialog onClose={() => setCallOpen(false)} />}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-6 sm:py-6">
+          <div className="mx-auto w-full max-w-3xl px-3 pt-4 pb-24 sm:px-6 sm:pt-6 sm:pb-28">
 
             {msgs.length === 0 && (
               <div className="mt-8 flex flex-col items-center text-center sm:mt-20">
