@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
+import { buildSearchQuery, FOLLOWUP_SEARCH } from "@/lib/search-query";
 
 const Body = z.object({
   messages: z
@@ -562,19 +563,6 @@ async function generateImage(prompt: string): Promise<string | null> {
   return null;
 }
 
-const FOLLOWUP_SEARCH = /(অনলাইন|ইন্টারনেট|গুগল|সার্চ|খুঁজে|খুজে|অনুসন্ধান|যাচাই|দেখে জানান|দেখে বলুন|search|google|check online)/i;
-
-/** সার্চ কোয়েরি: মোড নির্দেশ/ফাইল বাদ; শুধু "অনলাইনে দেখুন" ধরনের ফলো-আপে আগের প্রশ্নের বিষয় যোগ */
-export function buildSearchQuery(messages: { role: string; content: string }[]): string {
-  const clean = (x: string) => x.replace(/^\s*\[নির্দেশ:[\s\S]*?\]\s*/, "").replace(/\n*=== সংযুক্ত ফাইল:[\s\S]*$/, "").replace(/\s+/g, " ").trim();
-  const users = messages.filter((m) => m.role === "user").map((m) => clean(m.content));
-  const last = users[users.length - 1] ?? "";
-  const prev = users[users.length - 2] ?? "";
-  // বিষয়বস্তু ছাড়া শুধু "অনলাইন থেকে দেখে জানান" হলে আগের প্রশ্নই আসল বিষয়
-  const topicLess = last.replace(new RegExp(FOLLOWUP_SEARCH.source, "gi"), "").replace(/(থেকে|করে|একটু|আবার|দয়া|প্লিজ|please|জানান|বলুন|দেখুন|দেখে|যে|টা|টি|এটা|সেটা|[?।!.,])/gi, "").trim();
-  if (prev && FOLLOWUP_SEARCH.test(last) && topicLess.length < 8) return prev.slice(0, 200);
-  return last.slice(0, 200);
-}
 
 function needsSearch(t: string): boolean {
   if (/https?:\/\//.test(t)) return false;
