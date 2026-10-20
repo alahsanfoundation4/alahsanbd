@@ -562,13 +562,28 @@ async function generateImage(prompt: string): Promise<string | null> {
   return null;
 }
 
+const FOLLOWUP_SEARCH = /(অনলাইন|ইন্টারনেট|গুগল|সার্চ|খুঁজে|খুজে|অনুসন্ধান|যাচাই|দেখে জানান|দেখে বলুন|search|google|check online)/i;
+
+/** সার্চ কোয়েরি: মোড নির্দেশ/ফাইল বাদ; শুধু "অনলাইনে দেখুন" ধরনের ফলো-আপে আগের প্রশ্নের বিষয় যোগ */
+export function buildSearchQuery(messages: { role: string; content: string }[]): string {
+  const clean = (x: string) => x.replace(/^\s*\[নির্দেশ:[\s\S]*?\]\s*/, "").replace(/\n*=== সংযুক্ত ফাইল:[\s\S]*$/, "").replace(/\s+/g, " ").trim();
+  const users = messages.filter((m) => m.role === "user").map((m) => clean(m.content));
+  const last = users[users.length - 1] ?? "";
+  const prev = users[users.length - 2] ?? "";
+  // বিষয়বস্তু ছাড়া শুধু "অনলাইন থেকে দেখে জানান" হলে আগের প্রশ্নই আসল বিষয়
+  const topicLess = last.replace(new RegExp(FOLLOWUP_SEARCH.source, "gi"), "").replace(/(থেকে|করে|একটু|আবার|দয়া|প্লিজ|please|জানান|বলুন|দেখুন|দেখে|যে|টা|টি|এটা|সেটা|[?।!.,])/gi, "").trim();
+  if (prev && FOLLOWUP_SEARCH.test(last) && topicLess.length < 8) return prev.slice(0, 200);
+  return last.slice(0, 200);
+}
+
 function needsSearch(t: string): boolean {
   if (/https?:\/\//.test(t)) return false;
   if (/=== সংযুক্ত ফাইল:/.test(t)) return false;
   // Location / time-of-day questions are answered from server clock & location guidance, not web search
   if (/(কোন জায়গায়|কোথায় আছি|আমার অবস্থান|where am i|কয়টা বাজে|কত তারিখ|কি বার|কী বার)/i.test(t)) return false;
-  // ছোট সাধারণ কথায় (হাই, কেমন আছো, এখন কী করছ) সার্চ নয় — শুধু স্পষ্ট লাইভ-তথ্যের প্রশ্নে
-  if (t.trim().length < 12) return false;
+  // শুধু শুভেচ্ছা/সাধারণ ছোট কথায় সার্চ নয়; ছোট হলেও তথ্যের প্রশ্নে ("ডলার রেট", "সোনার দাম") সার্চ হবে
+  if (/^\s*(হাই|হ্যালো|hi|hello|ধন্যবাদ|thanks|ok|ঠিক আছে|আচ্ছা|কেমন আছ(ো|েন)?|আসসালামু আলাইকুম|সালাম)[\s?!।.]*$/i.test(t)) return false;
+  if (FOLLOWUP_SEARCH.test(t)) return true;
   if (/(সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম|বাজার দর|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|latest|news|price|weather|score|সার্চ|খুঁজে|অনুসন্ধান|search|অনলাইন|ইন্টারনেট|গুগল|google|আজ|এখন|বর্তমান|চলতি|এই বছর|এ বছর|গতকাল|কালকে|২০২[৫-৯]|202[5-9]|কে জিতে|কে জিতেছে|কে হয়েছেন|প্রধানমন্ত্রী|রাষ্ট্রপতি|প্রেসিডেন্ট|মন্ত্রী|চেয়ারম্যান|সিইও|ceo|current|today|now|recent|update|আপডেট|রিলিজ|release|ভার্সন|version|কবে|কোথায় পাওয়া|ঠিকানা|ফোন নম্বর|ওয়েবসাইট|website|ভর্তি|নোটিশ|বিজ্ঞপ্তি|রেজাল্ট|সময়সূচি|schedule|ম্যাচ|match|কার্যক্রম|ঘটনা|ঘটেছে|হামলা|দুর্ঘটনা|ভূমিকম্প|বন্যা)/i.test(t)) return true;
   // প্রশ্নবোধক বাক্যে নির্দিষ্ট নাম/তথ্য চাওয়া (কে, কত, কোন) — ধর্মীয় মাসআলা বাদে সার্চ করে নিশ্চিত হও
   if (/(কে |কত|কোন |কারা|who |what is|কী হয়েছে|কি হয়েছে)/i.test(t) && !/(কুরআন|আয়াত|হাদিস|সূরা|নামাজ|নামায|রোজা|ওজু|অজু|মাসআলা|ফিকহ|তাফসীর|দোয়া|দুআ)/i.test(t)) return true;
