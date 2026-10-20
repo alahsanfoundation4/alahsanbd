@@ -9,3 +9,13 @@ export function stripUnaskedSalam(reply: string, userText: string): string {
   if (userGaveSalam(userText)) return reply;
   return reply.replace(REPLY_SALAM, "").replace(REPLY_SALAM_LATIN, "");
 }
+
+/** লিংক ছাড়া ফাঁকা "সূত্র:" শিরোনাম সরায় (পরে লিংক থাকলে রাখে) */
+export function stripEmptySources(reply: string, done = true): string {
+  return reply.replace(/\n+[#*\s]*সূত্র\s*[:：]?[*\s]*((?:\n[ \t]*[-*]?[ \t]*)*)(?=\n*\[\[প্রশ্ন:|$)/g, (m) => (done || !/সূত্র\s*[:：]?[*\s]*$/.test(m) ? "" : m));
+}
+
+/** সার্চের জন্য মোডের [নির্দেশ: ...] ও সংযুক্ত ফাইল বাদ দিয়ে শুধু মূল প্রশ্ন */
+export function cleanSearchText(text: string): string {
+  return text.replace(/^\s*\[নির্দেশ:[\s\S]*?\]\s*/, "").replace(/\n*=== সংযুক্ত ফাইল:[\s\S]*$/, "").trim();
+}
