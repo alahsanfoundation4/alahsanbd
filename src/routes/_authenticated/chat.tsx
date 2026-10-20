@@ -8,7 +8,7 @@ import { Mic, MicOff, Send, Plus, Trash2, Volume2, VolumeX, LogOut, Shield, Menu
 
 import { CodePreviewDialog } from "@/components/chat/CodePreviewDialog";
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
-import { stripUnaskedSalam } from "@/lib/salam";
+import { stripEmptySources, stripUnaskedSalam } from "@/lib/salam";
 import { Button } from "@/components/ui/button";
 import { serviceError } from "@/lib/service-errors";
 import { toast } from "sonner";
@@ -607,7 +607,7 @@ function ChatPage() {
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }
             full += delta;
-            const shown = stripUnaskedSalam(full, apiText);
+            const shown = stripEmptySources(stripUnaskedSalam(full, apiText), false);
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: shown }]);
           }
         } catch { /* অসম্পূর্ণ/ভাঙা অংশ বাদ */ }
@@ -626,6 +626,10 @@ function ChatPage() {
       buf.split("\n").forEach(handle);
     } catch (e: any) {
       if (e?.name !== "AbortError") showErr(`ত্রুটি: ${e?.message || "ত্রুটি হয়েছে"}। আবার চেষ্টা করুন।`);
+    }
+    if (full && !failed) {
+      const cleaned = stripEmptySources(stripUnaskedSalam(full, apiText));
+      if (cleaned !== full) { full = cleaned; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
     }
     setLoading(false);
     // ত্রুটি হলে কিছুই ডাটাবেজে সেভ হবে না — শুধু পর্দায় সতর্কবার্তা

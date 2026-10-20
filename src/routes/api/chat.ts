@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
+import { buildSearchQuery, FOLLOWUP_SEARCH } from "@/lib/search-query";
 
 const Body = z.object({
   messages: z
@@ -248,10 +249,14 @@ async function handleChat(request: Request): Promise<Response> {
         
         const textMsgs = parsed.data.messages.map((m) => ({ role: m.role, content: m.content }));
         // Independent search and memory preparation run concurrently; preserve search coverage and timeout.
-        const searchText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
-        const searchP = needsSearch(searchText) ? Promise.race([
+        // সার্চে মোডের [নির্দেশ] ও ফাইল বাদ; ছোট/ফলো-আপ প্রশ্নে আগের প্রশ্নের প্রসঙ্গ যোগ
+        const rawLast = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        const searchMode = /^\s*\[নির্দেশ:\s*সরাসরি অনলাইন/.test(rawLast);
+        const searchText = buildSearchQuery(parsed.data.messages.map((m) => ({ role: m.role, content: m.content })));
+        const doSearch = !!searchText && (searchMode || needsSearch(searchText));
+        const searchP = doSearch ? Promise.race([
           webSearch(searchText).catch(() => ""),
-          new Promise<string>((resolve) => setTimeout(() => resolve(""), 6000)),
+          new Promise<string>((resolve) => setTimeout(() => resolve(""), 4500)),
         ]) : null;
         if (s?.url_reader !== false) {
           const last = textMsgs[textMsgs.length - 1];
@@ -310,13 +315,13 @@ async function handleChat(request: Request): Promise<Response> {
         }
 
         // Live web search for online/current questions
-        if (needsSearch(lastUser)) {
+        if (searchP) {
           stages.push("search");
           const found = await searchP;
           if (found) stages.push("verify");
           system += found
-            ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
-            : "\n\nব্যবহারকারী সাম্প্রতিক তথ্য চেয়েছেন কিন্তু ওয়েব অনুসন্ধান এখন কাজ করেনি। তথ্য পুরোনো হতে পারে তা স্পষ্ট জানাবে, অনুমান করবে না।";
+            ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (অনুসন্ধান: "${searchText.slice(0, 120)}", ${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: এই ফলাফলের ভিত্তিতে উত্তর দেবে। উত্তরে যে লিংক সত্যিই ব্যবহার করেছ কেবল সেগুলো শেষে "সূত্র:" শিরোনামে পূর্ণ URL সহ দেবে; কোনো লিংক না থাকলে "সূত্র:" লিখবে না। ফলাফলে প্রশ্নের তথ্য না থাকলে স্পষ্ট বলবে যে অনলাইনে নিশ্চিত তথ্য পাওয়া যায়নি — পুরোনো জ্ঞান থেকে নিশ্চিত দাবি করবে না।`
+            : "\n\nব্যবহারকারী সাম্প্রতিক তথ্য চেয়েছেন কিন্তু এই মুহূর্তে অনলাইন অনুসন্ধানের ফল পাওয়া যায়নি। প্রথম বাক্যেই এটা জানাবে, নিজের জ্ঞান থেকে বললে তা পুরোনো হতে পারে বলবে, অনুমান করবে না এবং কোনো \"সূত্র:\" বা লিংক লিখবে না।";
 
         }
         if (/ওয়েবসাইট|website|ওয়েব সাইট|অ্যাপ|app|landing|পেজ বানা|html/i.test(lastUser)) stages.push("code");
@@ -558,13 +563,17 @@ async function generateImage(prompt: string): Promise<string | null> {
   return null;
 }
 
+
 function needsSearch(t: string): boolean {
   if (/https?:\/\//.test(t)) return false;
   if (/=== সংযুক্ত ফাইল:/.test(t)) return false;
   // Location / time-of-day questions are answered from server clock & location guidance, not web search
   if (/(কোন জায়গায়|কোথায় আছি|আমার অবস্থান|where am i|কয়টা বাজে|কত তারিখ|কি বার|কী বার)/i.test(t)) return false;
-  // ছোট সাধারণ কথায় (হাই, কেমন আছো, এখন কী করছ) সার্চ নয় — শুধু স্পষ্ট লাইভ-তথ্যের প্রশ্নে
-  if (t.trim().length < 12) return false;
+  // শুধু শুভেচ্ছা/সাধারণ ছোট কথায় সার্চ নয়; ছোট হলেও তথ্যের প্রশ্নে ("ডলার রেট", "সোনার দাম") সার্চ হবে
+  if (/^\s*(হাই|হ্যালো|hi|hello|ধন্যবাদ|thanks|ok|ঠিক আছে|আচ্ছা|কেমন আছ(ো|েন)?|আসসালামু আলাইকুম|সালাম)[\s?!।.]*$/i.test(t)) return false;
+  // সাধারণ অংকে (যেমন ২+২ কত) অনলাইন সার্চ নয়
+  if (/[0-9০-৯]\s*[+\-*/×÷^]\s*[0-9০-৯]/.test(t) && !FOLLOWUP_SEARCH.test(t)) return false;
+  if (FOLLOWUP_SEARCH.test(t)) return true;
   if (/(সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম|বাজার দর|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|latest|news|price|weather|score|সার্চ|খুঁজে|অনুসন্ধান|search|অনলাইন|ইন্টারনেট|গুগল|google|আজ|এখন|বর্তমান|চলতি|এই বছর|এ বছর|গতকাল|কালকে|২০২[৫-৯]|202[5-9]|কে জিতে|কে জিতেছে|কে হয়েছেন|প্রধানমন্ত্রী|রাষ্ট্রপতি|প্রেসিডেন্ট|মন্ত্রী|চেয়ারম্যান|সিইও|ceo|current|today|now|recent|update|আপডেট|রিলিজ|release|ভার্সন|version|কবে|কোথায় পাওয়া|ঠিকানা|ফোন নম্বর|ওয়েবসাইট|website|ভর্তি|নোটিশ|বিজ্ঞপ্তি|রেজাল্ট|সময়সূচি|schedule|ম্যাচ|match|কার্যক্রম|ঘটনা|ঘটেছে|হামলা|দুর্ঘটনা|ভূমিকম্প|বন্যা)/i.test(t)) return true;
   // প্রশ্নবোধক বাক্যে নির্দিষ্ট নাম/তথ্য চাওয়া (কে, কত, কোন) — ধর্মীয় মাসআলা বাদে সার্চ করে নিশ্চিত হও
   if (/(কে |কত|কোন |কারা|who |what is|কী হয়েছে|কি হয়েছে)/i.test(t) && !/(কুরআন|আয়াত|হাদিস|সূরা|নামাজ|নামায|রোজা|ওজু|অজু|মাসআলা|ফিকহ|তাফসীর|দোয়া|দুআ)/i.test(t)) return true;
