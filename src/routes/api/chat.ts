@@ -769,15 +769,501 @@ async function generateImage(prompt: string): Promise<string | null> {
 // অনুসন্ধান [#11]–[#20]
 // ---------------------------------------------------------------------
 // [#11] কখন সার্চ: সময়-সংবেদনশীল বা তথ্যভিত্তিক প্রশ্ন; শুভেচ্ছা/আলাপ/অংকে নয়
-export function needsSearch(t: string): boolean {
-  const q = t.trim();
-  if (q.length < 6 || /https?:\/\//.test(q)) return false;
-  if (/^(আসসালামু|সালাম|হাই|হ্যালো|hello|hi|ধন্যবাদ|thanks|কেমন আছ|ok|ঠিক আছে)/i.test(q) && q.length < 40) return false;
-  if (/^[\d\s+\-*/().=x×÷^%]+$/.test(q)) return false;
-  if (/(সর্বশেষ|সাম্প্রতিক|আজ|এখন|বর্তমান|খবর|সংবাদ|দাম|বাজার|রেট|আবহাওয়া|ফলাফল|নির্বাচন|২০২[৪-৯]|202[4-9]|latest|news|price|today|current|update|version|রিলিজ|ভার্সন)/i.test(q)) return true;
-  return /(কে|কী|কি|কোথায়|কবে|কত|কোন|কাদের|কেন|ইতিহাস|সম্পর্কে|তথ্য|পরিচয়|ইউনিয়ন|উপজেলা|জেলা|গ্রাম|প্রতিষ্ঠান|who|what|when|where|which|how many|history|about)/i.test(q);
+type VerificationNeed = {
+  search: boolean;
+  mustRefuseWithoutEvidence: boolean;
+  reason: string;
+};
+
+type SearchResult = {
+  text: string;
+  count: number;
+  strongCount: number;
+  hasStrongEvidence: boolean;
+};
+
+type Hit = {
+  title: string;
+  url: string;
+  snippet: string;
+  trust: number;
+  sourceType: "official" | "primary" | "reputable-news" | "reference" | "general";
+};
+
+const SEARCH_CACHE_TTL_MS = 5 * 60_000;
+const SEARCH_RESULT_LIMIT = 8;
+const STRONG_EVIDENCE_MINIMUM = 1;
+
+const STOP = new Set(
+  "আমি আমার আমাকে তুমি আপনি আপনার একটু দয়া করে প্লিজ বলুন বলো বলেন জানাও জানান জানতে চাই চাই সম্পর্কে বিষয়ে কি কী টা টি এর এ ও আর যে সে please tell me about what is the a an of in on for".split(
+    " ",
+  ),
+);
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+
+const strip = (value: string) =>
+  value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+function isGreetingOrSmallTalk(text: string): boolean {
+  const value = text.trim();
+
+  if (value.length < 3) return true;
+
+  return /^(আসসালামু আলাইকুম|আসসালামু|সালাম|হাই|হ্যালো|hello|hi|ধন্যবাদ|thanks|কেমন আছ|কেমন আছেন|ok|ঠিক আছে|আচ্ছা)[!,.।\s]*$/i.test(
+    value,
+  );
 }
 
+function isMathOnly(text: string): boolean {
+  return /^[\d\s+\-*/().=x×÷^%]+$/.test(text.trim());
+}
+
+function hasQuestionIntent(text: string): boolean {
+  return /[?？]|(কে|কী|কি|কোথায়|কোথায়|কবে|কত|কোন|কাদের|কেন|কিভাবে|কীভাবে|বলুন|জানান|তথ্য|পরিচয়|সম্পর্কে|history|who|what|when|where|which|how|tell me|information)/i.test(
+    text,
+  );
+}
+
+function hasTimeSensitiveIntent(text: string): boolean {
+  return /(বর্তমান|এখন|আজ|কাল|সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম|বাজার|রেট|আবহাওয়া|আবহাওয়া|ফলাফল|নির্বাচন|জয়ী|পরাজিত|রিলিজ|ভার্সন|update|latest|news|today|current|price|weather|result|election|version)/i.test(
+    text,
+  );
+}
+
+function hasIdentityOrOfficeIntent(text: string): boolean {
+  return /(চেয়ারম্যান|চেয়ারম্যান|মেয়র|মেয়র|এমপি|মন্ত্রী|রাষ্ট্রপতি|প্রধানমন্ত্রী|সচিব|কর্মকর্তা|অফিসার|পরিচালক|সভাপতি|প্রধান|ইমাম|খতিব|শিক্ষক|ভিসি|উপাচার্য|ম্যানেজার|প্রতিষ্ঠাতা|owner|chairman|mayor|minister|president|prime minister|director|officer|head|principal|founder|ceo|who is)/i.test(
+    text,
+  );
+}
+
+function hasLocalInstitutionIntent(text: string): boolean {
+  return /(ইউনিয়ন|ইউনিয়ন|উপজেলা|জেলা|গ্রাম|পৌরসভা|সিটি কর্পোরেশন|থানা|হাসপাতাল|স্কুল|কলেজ|বিশ্ববিদ্যালয়|বিশ্ববিদ্যালয়|মাদ্রাসা|প্রতিষ্ঠান|অফিস|সরকারি|government|union|upazila|district|hospital|school|college|university|office)/i.test(
+    text,
+  );
+}
+
+function hasHighRiskIntent(text: string): boolean {
+  return /(আইন|ধারা|মামলা|জামিন|আইনজীবী|ওষুধ|ডোজ|চিকিৎসা|রোগ|প্রেসক্রিপশন|শেয়ার|শেয়ার|বিনিয়োগ|বিনিয়োগ|সুদ|ব্যাংক|ফতোয়া|ফতোয়া|মাসআলা|হাদিস|হাদীস|কুরআন|কোরআন|আয়াত|আয়াত|হারাম|হালাল|law|legal|medicine|dose|diagnosis|investment|stock|fatwa|hadith|quran)/i.test(
+    text,
+  );
+}
+
+export function assessVerificationNeed(
+  text: string,
+  context: {
+    isEngineer: boolean;
+    isSiteReq: boolean;
+    isCode: boolean;
+    hasImage: boolean;
+  },
+): VerificationNeed {
+  const query = text.trim();
+
+  if (!query || context.hasImage || isGreetingOrSmallTalk(query) || isMathOnly(query)) {
+    return {
+      search: false,
+      mustRefuseWithoutEvidence: false,
+      reason: "conversation-or-math",
+    };
+  }
+
+  const identity = hasIdentityOrOfficeIntent(query);
+  const localInstitution = hasLocalInstitutionIntent(query);
+  const timeSensitive = hasTimeSensitiveIntent(query);
+  const highRisk = hasHighRiskIntent(query);
+  const asksForFacts = hasQuestionIntent(query);
+
+  // কোড প্রশ্নেও framework version, current API, বর্তমান প্যাকেজ তথ্যের
+  // জন্য সার্চ চলবে। কিন্তু ব্যবহারকারী নিজে যে code দিয়েছেন সেটি ব্যাখ্যায়
+  // সার্চ বাধ্যতামূলক নয়।
+  const technicalFreshness =
+    context.isCode &&
+    /(api|sdk|লাইব্রেরি|package|প্যাকেজ|react|typescript|javascript|python|node|version|ভার্সন|release|documentation|ডকুমেন্টেশন)/i.test(
+      query,
+    );
+
+  const search =
+    identity ||
+    localInstitution ||
+    timeSensitive ||
+    highRisk ||
+    technicalFreshness ||
+    asksForFacts;
+
+  return {
+    search,
+    mustRefuseWithoutEvidence: identity || timeSensitive || highRisk || (localInstitution && asksForFacts),
+    reason: identity
+      ? "identity-or-office"
+      : timeSensitive
+        ? "time-sensitive"
+        : highRisk
+          ? "high-risk"
+          : localInstitution
+            ? "local-institution"
+            : technicalFreshness
+              ? "technical-freshness"
+              : asksForFacts
+                ? "factual-question"
+                : "general",
+  };
+}
+
+// পুরোনো call-site compatible রাখার জন্য।
+export function needsSearch(text: string): boolean {
+  return assessVerificationNeed(text, {
+    isEngineer: false,
+    isSiteReq: false,
+    isCode: false,
+    hasImage: false,
+  }).search;
+}
+
+export function searchKeywords(text: string): string {
+  return text
+    .replace(/https?:\/\/[^\s<>"')]+/gi, " ")
+    .replace(/[?।,!:;"'()[\]{}]/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word && !STOP.has(word.toLowerCase()))
+    .slice(0, 14)
+    .join(" ")
+    .slice(0, 180);
+}
+
+function sourceTypeOf(url: string): Hit["sourceType"] {
+  const host = new URL(url).hostname.toLowerCase();
+
+  if (
+    host.endsWith(".gov.bd") ||
+    host.endsWith(".gov") ||
+    host.endsWith(".edu") ||
+    host === "who.int" ||
+    host.endsWith(".who.int") ||
+    host === "un.org" ||
+    host.endsWith(".un.org")
+  ) {
+    return "official";
+  }
+
+  if (
+    host === "quran.com" ||
+    host.endsWith(".quran.com") ||
+    host === "sunnah.com" ||
+    host.endsWith(".sunnah.com") ||
+    host === "bjsm.org" ||
+    host.endsWith(".bjsm.org")
+  ) {
+    return "primary";
+  }
+
+  if (
+    /(^|\.)bbc\.com$|(^|\.)reuters\.com$|(^|\.)apnews\.com$|(^|\.)prothomalo\.com$|(^|\.)thedailystar\.net$|(^|\.)bdnews24\.com$|(^|\.)aljazeera\.com$/.test(
+      host,
+    )
+  ) {
+    return "reputable-news";
+  }
+
+  if (
+    host.endsWith(".wikipedia.org") ||
+    host === "en.banglapedia.org" ||
+    host.endsWith(".banglapedia.org")
+  ) {
+    return "reference";
+  }
+
+  return "general";
+}
+
+function trustOf(url: string): number {
+  try {
+    const sourceType = sourceTypeOf(url);
+
+    if (sourceType === "official") return 10;
+    if (sourceType === "primary") return 9;
+    if (sourceType === "reputable-news") return 7;
+    if (sourceType === "reference") return 4;
+
+    return 1;
+  } catch {
+    return 0;
+  }
+}
+
+function isStrongSource(hit: Hit): boolean {
+  return hit.sourceType === "official" || hit.sourceType === "primary";
+}
+
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (/^(utm_|fbclid|gclid)/i.test(key)) parsed.searchParams.delete(key);
+    }
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+async function cachedSearch(query: string): Promise<SearchResult> {
+  const cacheKey = searchKeywords(query).toLowerCase();
+  const cached = searchCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
+    return cached.value;
+  }
+
+  const result = await webSearch(query);
+
+  if (result.count > 0) {
+    cacheSet(searchCache, cacheKey, { at: Date.now(), value: result });
+  }
+
+  return result;
+}
+
+async function wikiSearch(lang: "bn" | "en", query: string): Promise<Hit[]> {
+  const response = await fetch(
+    `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&utf8=1&format=json&origin=*`,
+    {
+      headers: {
+        "User-Agent": "AlAhsanAI/2.0",
+      },
+      signal: AbortSignal.timeout(3_000),
+    },
+  );
+
+  if (!response.ok) return [];
+
+  const data: any = await response.json();
+
+  return (data?.query?.search ?? []).slice(0, 2).map((item: any) => {
+    const title = String(item?.title ?? "");
+    const url = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
+
+    return {
+      title: `উইকিপিডিয়া (${lang}): ${title}`,
+      url,
+      snippet: strip(String(item?.snippet ?? "")),
+      trust: trustOf(url),
+      sourceType: "reference" as const,
+    };
+  });
+}
+
+async function ddgSearch(query: string): Promise<Hit[]> {
+  const response = await fetch("https://html.duckduckgo.com/html/", {
+    method: "POST",
+    headers: {
+      "User-Agent": BROWSER_UA,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: `q=${encodeURIComponent(query)}&kl=bd-en`,
+    signal: AbortSignal.timeout(3_500),
+  });
+
+  if (!response.ok) return [];
+
+  const html = await response.text();
+  const results: Hit[] = [];
+  const matcher =
+    /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(html)) && results.length < 8) {
+    let url = match[1] ?? "";
+    const redirectMatch = /uddg=([^&]+)/.exec(url);
+
+    if (redirectMatch?.[1]) {
+      try {
+        url = decodeURIComponent(redirectMatch[1]);
+      } catch {
+        continue;
+      }
+    }
+
+    url = normalizeUrl(url);
+
+    if (!url || /duckduckgo\.com\/y\.js/i.test(url)) continue;
+
+    const sourceType = sourceTypeOf(url);
+
+    results.push({
+      title: strip(match[2] ?? ""),
+      url,
+      snippet: strip(match[3] ?? ""),
+      trust: trustOf(url),
+      sourceType,
+    });
+  }
+
+  return results;
+}
+
+async function newsSearch(query: string): Promise<Hit[]> {
+  const response = await fetch(
+    `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=bn&gl=BD&ceid=BD:bn`,
+    {
+      headers: { "User-Agent": BROWSER_UA },
+      signal: AbortSignal.timeout(3_500),
+    },
+  );
+
+  if (!response.ok) return [];
+
+  const xml = await response.text();
+
+  return xml
+    .split("<item>")
+    .slice(1, 7)
+    .map((item) => {
+      const tag = (name: string) =>
+        (new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(item)?.[1] ?? "")
+          .replace(/<!\[CDATA\[|\]\]>/g, "")
+          .trim();
+
+      const url = normalizeUrl(tag("link"));
+
+      if (!url) return null;
+
+      return {
+        title: strip(tag("title")),
+        url,
+        snippet: `প্রকাশের সময়: ${strip(tag("pubDate"))}`,
+        trust: trustOf(url),
+        sourceType: sourceTypeOf(url),
+      };
+    })
+    .filter((item): item is Hit => Boolean(item?.title && item.url));
+}
+
+async function tavilySearch(query: string): Promise<Hit[]> {
+  const key = process.env["TAVILY_API_KEY"]?.trim();
+
+  if (!key) return [];
+
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      query,
+      max_results: 6,
+      search_depth: "advanced",
+      include_answer: false,
+      include_raw_content: false,
+    }),
+    signal: AbortSignal.timeout(4_500),
+  });
+
+  if (!response.ok) return [];
+
+  const data: any = await response.json();
+
+  return (data?.results ?? [])
+    .map((item: any): Hit | null => {
+      const url = normalizeUrl(String(item?.url ?? ""));
+
+      if (!url) return null;
+
+      return {
+        title: String(item?.title ?? "").trim(),
+        url,
+        snippet: String(item?.content ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 900),
+        trust: trustOf(url) + 1,
+        sourceType: sourceTypeOf(url),
+      };
+    })
+    .filter((item: Hit | null): item is Hit => item !== null);
+}
+
+function deduplicateHits(hits: Hit[]): Hit[] {
+  const seen = new Set<string>();
+
+  return hits.filter((hit) => {
+    const normalized = normalizeUrl(hit.url);
+
+    if (!normalized || seen.has(normalized)) return false;
+
+    seen.add(normalized);
+    hit.url = normalized;
+
+    return Boolean(hit.title && hit.snippet);
+  });
+}
+
+async function webSearch(rawQuery: string): Promise<SearchResult> {
+  const query = searchKeywords(rawQuery) || rawQuery.slice(0, 180);
+  const isNewsQuery = /(খবর|সংবাদ|আজ|বর্তমান|সর্বশেষ|সাম্প্রতিক|news|today|current|latest)/i.test(
+    rawQuery,
+  );
+
+  const tasks: Promise<Hit[]>[] = [
+    ddgSearch(query),
+    tavilySearch(query),
+    wikiSearch("bn", query),
+    wikiSearch("en", query),
+  ];
+
+  if (isNewsQuery) {
+    tasks.push(newsSearch(query));
+  }
+
+  const settled = await Promise.allSettled(tasks);
+
+  const hits = deduplicateHits(
+    settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
+  )
+    .sort((a, b) => b.trust - a.trust)
+    .slice(0, SEARCH_RESULT_LIMIT);
+
+  const strongHits = hits.filter(isStrongSource);
+  const strongCount = strongHits.length;
+
+  const text = hits
+    .map((hit, index) => {
+      const label =
+        hit.sourceType === "official"
+          ? "সরকারি/প্রাতিষ্ঠানিক"
+          : hit.sourceType === "primary"
+            ? "প্রাথমিক উৎস"
+            : hit.sourceType === "reputable-news"
+              ? "নির্ভরযোগ্য সংবাদ"
+              : hit.sourceType === "reference"
+                ? "রেফারেন্স"
+                : "সাধারণ ওয়েব উৎস";
+
+      return `[${index + 1}] ${hit.title}
+ধরন: ${label}
+লিংক: ${hit.url}
+সারাংশ: ${hit.snippet}`;
+    })
+    .join("\n\n");
+
+  return {
+    text,
+    count: hits.length,
+    strongCount,
+    hasStrongEvidence: strongCount >= STRONG_EVIDENCE_MINIMUM,
+  };
+}
 // [#19] স্মার্ট কিওয়ার্ড ফিল্টার
 const STOP = new Set("আমি আমার আমাকে তুমি আপনি আপনার একটু দয়া করে প্লিজ বলুন বলো বলেন জানাও জানান জানতে চাই চাই সম্পর্কে বিষয়ে কি কী টা টি এর এ ও আর যে সে please tell me about what is the a an of in on for".split(" "));
 export function searchKeywords(t: string): string {
