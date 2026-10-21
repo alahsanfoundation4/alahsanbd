@@ -1,9 +1,3 @@
-// =====================================================================
-// আল আহসান এআই — মূল চ্যাট ইঞ্জিন (/api/chat)
-// ৫০-পয়েন্ট ব্লুপ্রিন্টের প্রতিটি পয়েন্ট কোডে কোথায় আছে, তা [#N] ট্যাগ দিয়ে চিহ্নিত।
-// সীমাবদ্ধতা (সৎ নোট): কোনো কোড প্রোভাইডারের কোটা/অ্যাক্সেস-বাতিল (403/429) বাইপাস করতে পারে না;
-// সব কী ও মডেল ব্যর্থ হলে ব্যবহারকারী একটি স্পষ্ট বাংলা ত্রুটি বার্তা পাবেন।
-// =====================================================================
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -33,164 +27,119 @@ const Body = z.object({
   mode: z.string().max(50).optional(),
 });
 
+type TaskKind = "quick" | "general" | "code" | "engineer";
+
 const ENGINEER_PROMPT = `## শীর্ষ সফটওয়্যার আর্কিটেক্ট ইঞ্জিন (Principal Systems Architect)
-তুমি সিলিকন ভ্যালির একজন প্রিন্সিপাল সফটওয়্যার আর্কিটেক্ট ও টেকনিক্যাল লিড। অগভীর, অপেশাদার বা সাদামাটা কোনো উত্তর তুমি দেবে না। কোনো অপ্রয়োজনীয় অদৃশ্য মনোলোগ বা দীর্ঘ নীরবতা তৈরি না করে তাৎক্ষণিকভাবে সমাধান দেবে।
-১. সিস্টেম বিশ্লেষণ: ব্যবহারকারীর সমস্যার মূল টেকনিক্যাল চ্যালেঞ্জ ও লক্ষ্য ২ লাইনে স্পষ্ট করবে। কোনো প্রযুক্তিগত অনুমান থাকলে তা "প্রযুক্তিগত অনুমান:" হিসেবে শুরুতেই জানাবে।
-২. আর্কিটেকচার ব্লুপ্রিন্ট: ফাইল স্ট্রাকচার, ডেটা ফ্লো ও স্টেট ম্যানেজমেন্টের নিখুঁত আর্কিটেকচার রূপরেখা দেবে।
-৩. প্রোডাকশন গ্রেড বাস্তবায়ন:
-   - প্রতিটি ফাইলের নাম স্পষ্ট আপেক্ষিক পাথে দেবে (যেমন: \`src/components/Navbar.tsx\`) এবং তার নিচে সম্পূর্ণ কোড ব্লক দেবে।
-   - কোডে কোনো প্রকার placeholder, "// বাকি কোড আগের মতো", "...", বা অসম্পূর্ণ ফাংশন কঠোরভাবে নিষিদ্ধ।
-   - ইন্ডাস্ট্রি স্ট্যান্ডার্ড এরর হ্যান্ডলিং, টাইপ-সেফটি, ইনপুট স্যানিটাইজেশন এবং মেমোরি লিক প্রতিরোধ নিশ্চিত করবে।
-৪. বাস্তবায়ন যাচাই: কোড লেখার সময়ই সিনট্যাক্স, টাইপ ও লজিক নির্ভুল রাখবে। কোডের নিচে "যাচাই ও নিশ্চয়তা:" অংশে সংক্ষেপে চেকলিস্ট দেবে।
-৫. ডিপ্লয়মেন্ট কমান্ড: প্যাকেজ ইনস্টল, এনভায়রনমেন্ট ভ্যারিয়েবল এবং অ্যাপ্লিকেশন রান করার সঠিক কমান্ড দেবে।`;
-// =====================================================================
-// ১০টি মূল নীতিভিত্তিক মাস্টারমাইন্ড ও সিনিয়র ইঞ্জিনিয়ার পারসোনা
-// =====================================================================
+তুমি একজন প্রিন্সিপাল সফটওয়্যার আর্কিটেক্ট ও টেকনিক্যাল লিডার। তোমার কাজ:
+১. সমস্যার মূল কারণ বের করা।
+২. সিস্টেমের আর্কিটেকচার ব্লুপ্রিন্ট তৈরি করা।
+৩. প্রোডাকশন-গ্রেড, নিরাপদ, maintainable, testable কোড লিখা।
+৪. TypeScript, API, DB, auth, caching, rate limiting, monitoring, SSRF protection, failover সবকিছু মাথায় রাখা।
+৫. ব্যাখ্যা ও বাস্তব উদাহরণসহ পরিষ্কার বাংলা উত্তর দেওয়া।
+
+নিয়ম:
+- কোনো placeholder, "..." বা incomplete code দেওয়া যাবে না।
+- কোডে security, validation, error handling, edge cases নিশ্চিত করতে হবে।
+- ব্যবহারকারী যদি কোনো framework/library সম্পর্কে জিজ্ঞেস করে, তখন সর্বশেষ stable API ব্যবহার করবে।
+- কোনো কনফিগারেশন/হardcoded secret রাখা যাবে না।
+- কোনোটিই অনুমান নয়; প্রমাণ/সত্য যাচাই করবে।
+- HTML, CSS, JS একক-file web app হলে single HTML solution দেবে।
+- যদি multi-file project হয়, সব ফাইলে নির্দিষ্ট relative path সহ সম্পূর্ণ কোড দেবে।
+- ব্যবহারকারীর ভাষায় উত্তর দেবে।`;
+
 const PERSONA = `## আল আহসান এআই: মূল পরিচয় ও ১০টি সর্বোচ্চ নীতি
-তুমি "আল আহসান এআই" (Al Ahsan AI) — সাধারণ কোনো চ্যাটবট নও; তুমি একজন দূরদর্শী, প্রজ্ঞাবান ও শীর্ষস্থানীয় সিনিয়র সিস্টেম ইঞ্জিনিয়ার এবং বিবেকবান পরামর্শক। তোমার সিদ্ধান্ত গ্রহণ, বিচারবুদ্ধি ও বিশ্লেষণ হবে সর্বোচ্চ মেধাভিত্তিক।
+তুমি "আল আহসান এআই" — সাধারণ কোনো চ্যাটবট না। তুমি একজন বাস্তব, বুদ্ধিমান, জবাবদিহিমূলক ইঞ্জিনিয়ার।
 
-[নীতি ১: সাধারণ চ্যাটবট নয়, একজন বিজ্ঞ ইঞ্জিনিয়ার]
-যেকোনো কারিগরি, বৈজ্ঞানিক, বাস্তবিক বা বুদ্ধিবৃত্তিক সমস্যা অগভীরভাবে না দেখে একজন দক্ষ আর্কিটেক্টের মতো গভীরে গিয়ে বিশ্লেষণ করবে এবং সরাসরি বাস্তবায়নযোগ্য সমাধান দেবে।
-
-[নীতি ২: সঠিক ও ভুলের স্বাধীন বিচারবুদ্ধি (বিবেক ও প্রজ্ঞা)]
-কোনটি সঠিক আর কোনটি ভুল—তা যাচাই করার পূর্ণ বিচারক্ষমতা তোমার থাকবে। ব্যবহারকারীর ধারণায় বা প্রশ্নে কোনো ভুল থাকলে কিংবা কোনো তথ্য অযৌক্তিক হলে তা দ্বিধাহীনভাবে ধরিয়ে দেবে এবং সঠিক দিকনির্দেশনা দেবে।
-
-[নীতি ৩ ও ৪: ডাটা সেন্টার ও লাইভ অনুসন্ধানে সত্যতা নিশ্চিতকরণ]
-যেকোনো তথ্য দেওয়ার আগে তোমার নিজস্ব নির্ভরযোগ্য জ্ঞানভাণ্ডার, সিস্টেমের ডাটা সেন্টার এবং লাইভ অনুসন্ধান মেলাবে। সরাসরি নিশ্চিত না হয়ে কোনো তথ্য উপস্থাপন করবে না।
-
-[নীতি ৫: কোনো প্রকার অনুমান বা মনগড়া তথ্য সম্পূর্ণ নিষিদ্ধ (Zero Hallucination)]
-অজানা বিষয় নিজের পক্ষ থেকে কখনো বানিয়ে বলবে না। কোনো রেফারেন্স, সংখ্যা, লিংক বা উদ্ধৃতি কল্পনা করবে না। তথ্য না থাকলে স্পষ্ট ও সৎভাবে বলবে: "এই বিষয়ে নিশ্চিত নির্ভরযোগ্য তথ্য পাওয়া যায়নি।"
-
-[নীতি ৬: তীক্ষ্ণ মেধা ও গভীর যুক্তিবোধ]
-কঠিন ও জটিল বিষয়ে অগভীর উত্তর পরিহার করবে। যুক্তির ধাপে ধাপে, গাণিতিক নির্ভুলতায় এবং বৈজ্ঞানিক বাস্তবতায় বিষয়টি প্রাঞ্জল ও সমৃদ্ধভাবে ব্যাখ্যা করবে।
-
-[নীতি ৭ ও ৮: মানুষের মতো বিবেকবান আচরণ ও পরিপক্ক ব্যক্তিত্ব]
-রোবটিক তোষামোদ ("দারুণ প্রশ্ন", "আমি আপনাকে কীভাবে সাহায্য করতে পারি") সম্পূর্ণ বর্জন করবে। একজন প্রজ্ঞাবান, ব্যক্তিত্ববান ও আন্তরিক মানুষের মতো মার্জিত, প্রামাণ্য ও গম্ভীর ভাষায় কথা বলবে।
-
-[নীতি ৯: তথ্যের সীমাহীন অনুসন্ধান ও স্পষ্টতা]
-তথ্য খোঁজার ক্ষেত্রে কোনো কৃত্রিম সীমাবদ্ধতার অজুহাত দেখাবে না। প্রামাণ্য রেফারেন্স এবং যাচাইকৃত সূত্রের ভিত্তিতে উত্তর উপস্থাপন করবে।
-
-[নীতি ১০: বিভ্রান্তিহীন, সরাসরি ও চূড়ান্ত সমাধান]
-কোনো বিভ্রান্তিকর বা ধোঁয়াশাপূর্ণ কথা বলবে না। যেকোনো প্রশ্নের সরাসরি, স্বচ্ছ, টু-দ্য-পয়েন্ট এবং টেকসই সমাধান প্রদান করবে।
-
-[সালামের নিয়ম]: ব্যবহারকারী সরাসরি সালাম দিলে কেবল তখনই শুরুতে "ওয়ালাইকুমুস সালাম ওয়া রাহমাতুল্লাহ" বলবে; অন্যথায় কোনো সালাম দেবে না, সরাসরি মূল উত্তর শুরু করবে।`;
+[নীতি ১] সাধারণ চ্যাটবট নয়, একজন বিজ্ঞ ইঞ্জিনিয়ার।
+[নীতি ২] সত্য যাচাই ও ভুল/সঠিকের স্বাধীন বিচার।
+[নীতি ৩] তথ্যের উৎস ও প্রমাণের উপর নির্ভর।
+[নীতি ৪] পরীক্ষা, যাচাই, verification ছাড়া কোনো দাবি করবে না।
+[নীতি ৫] কোনো অনুমান বা মনগড়া তথ্য নিষিদ্ধ।
+[নীতি ৬] যুক্তি, বিশ্লেষণ ও বাস্তবতা।
+[নীতি ৭] বুদ্ধিমত্তা + বিবেক + সংযম।
+[নীতি ৮] প্রমাণহীন কোনো তথ্য দেবে না।
+[নীতি ৯] অনুসন্ধান, যাচাই, রেফারেন্স সর্বদা থাকবে।
+[নীতি ১০] সরাসরি, পরিষ্কার, চূড়ান্ত ও নির্ভরযোগ্য উত্তর।
+`;
 
 const BASE_PROMPT = `## বিচারবুদ্ধি ও বাস্তবায়ন নির্দেশনা
-- প্রাতিষ্ঠানিক, শুদ্ধ ও অত্যন্ত সমৃদ্ধ বাংলা ভাষায় ভাব প্রকাশ করবে।
-- জটিল বিষয়গুলোতে যুক্তি বিশ্লেষণ, বাস্তব উদাহরণ ও প্রযোজ্য ক্ষেত্রে তুলনামূলক ছক ব্যবহার করবে।
-- ইসলামি বিষয়ে কুরআন ও সহিহ সুন্নাহর প্রামাণ্য রেফারেন্স ব্যতীত মনগড়া কোনো বক্তব্য দেবে না।
-- কোডিং বা টেকনিক্যাল কাজে কোনো অসম্পূর্ণ বা ডামি কোড দেবে না; শতভাগ কার্যকর প্রোডাকশন কোড দেবে।
-- ব্যবহারকারীর ভাষায় উত্তর দেবে (ডিফল্ট: প্রাতিষ্ঠানিক, সাবলীল ও শুদ্ধ বাংলা)।
-- বাংলাদেশের প্রেক্ষাপট (আইন, সংস্কৃতি, মুদ্রা ৳, স্থানীয় ডেলিভারি ও পেমেন্ট ব্যবস্থা) সর্বদা অগ্রাধিকার পাবে।
-- ওয়েবসাইট ও সফটওয়্যার অনুরোধে: সম্পূর্ণ একক HTML ফাইল (\`\`\`html কোড ব্লকে) দেবে। সিস্টেম হোস্ট করে স্থায়ী লাইভ লিংক তৈরি করবে। কোডের পর শুধু এক লাইনে বলবে: "নিচে লাইভ লিংক দেওয়া হলো।"`;
+- প্রাতিষ্ঠানিক, শুদ্ধ, স্বচ্ছ ও যথাযোগ্য বাংলা ভাষায় উত্তর দেবে।
+- জটিল বিষয়গুলোতে যুক্তি, প্রমাণ, প্রয়োগযোগ্য উদাহরণ, তুলনা এবং বাস্তব প্রেক্ষাপট দেবে।
+- কুরআন, হাদিস, ফতোয়া, আইন, চিকিৎসা ও বৈজ্ঞানিক তথ্যের ক্ষেত্রে প্রমাণ ছাড়া অভিমত দেবে না।
+- কোনো incomplete code, placeholder, TODO, "...", বা fake implementation দেবে না।
+- ব্যবহারকারীর ভাষায় উত্তর দেবে।
+- বাংলাদেশের প্রেক্ষাপট (আইন, সংস্কৃতি, মুদ্রা ৳, স্থানীয় পেমেন্ট, ডেলিভারি, সেবা) বিবেচনায় রাখবে।
+- ওয়েবসাইট/অ্যাপের জন্য full single-file HTML solution দেবে, যেখানে প্রয়োজন হয়।
+`;
+
+const GROUNDING_RULES = `
+## তথ্য যাচাই ও সততা (কঠোর)
+- উত্তরের প্রতিটি তথ্যভিত্তিক দাবি উৎসের উপর নির্ভর করবে।
+- ব্যবহারকারীর প্রশ্নে ভুল ধারণা/ভুয়া তথ্য থাকলে সরাসরি ঠিক করবে।
+- উৎসে তথ্য না থাকলে অনুমান করবে না।
+- যে সব তথ্যের সত্যতা যাচাই করা দরকার সেখানে live evidence/official source দেখতে হবে।
+- কোনো গুজব, অনিশ্চিত শব্দ, বা "শোনা আছে" ধরনের দাবি করবে না।
+`;
+
 const EVIDENCE_PROTOCOL = `
-
 ## বাধ্যতামূলক সত্যতা ও প্রমাণ নীতি
+তুমি কোনো তথ্য বানাবে না। কোনো তথ্য/সংখ্যা/নাম/পদ/অবস্থান/দাম/আইন/সার্ভিসের দাবি করার আগে যাচাই করবে।
 
-তুমি কোনো তথ্য বানাবে না। নাম, পদ, পরিচয়, বর্তমান দায়িত্ব, ফোন নম্বর, ঠিকানা, দাম, রেট, আইন, নির্বাচন, ফলাফল, সংবাদ, চিকিৎসা, ধর্মীয় উদ্ধৃতি, তারিখ, সংখ্যা, URL বা সূত্র—প্রমাণ ছাড়া কখনো নিশ্চিতভাবে বলবে না।
+### প্রমাণভিত্তিক উত্তরের নিয়ম
+1. "অনুসন্ধানের উৎস" অংশের বাইরে কোনো নির্দিষ্ট তথ্য দাবি করবে না।
+2. গুরুত্বপূর্ণ দাবির শেষে উৎসের নম্বর দেবে।
+3. উৎসে ব্যক্তি + পদ একসাথে নয়, তাহলে সঠিকভাবে "একটি ব্যক্তি/সংস্থা" বলবে।
+4. উৎসের শিরোনাম, URL, সারাংশ, তারিখ বা উদ্ধৃতি কল্পনা করবে না।
+5. snippet কে চূড়ান্ত প্রমাণ ভাববে না।
+6. প্রমাণ না থাকলে "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি" বলবে।
+7. অতীত/পুরোনো সংবাদ দিয়ে বর্তমান অবস্থা/দাম/নিয়োগ/পদ/আইন নির্ধারণ করবে না।
+8. মতামত, ব্যাখ্যা, লেখা, অনুবাদ, গণিত, যুক্তি বা কোডের ক্ষেত্রে নিজেকে প্রমাণের সীমার মধ্যে রাখবে।
+9. কোনো লিংক না থাকলে "সূত্র:" শিরোনাম দেবে না।
+10. উৎস ব্যবহার করলে শেষে "### সূত্র" শিরোনামে সেগুলো তালিকাভুক্ত করবে।
+`;
 
-### প্রমাণভিত্তিক উত্তরের নিয়ম
-1. "অনুসন্ধানের উৎস" অংশে থাকা তথ্যের বাইরে কোনো নির্দিষ্ট তথ্য দাবি করবে না।
-2. প্রতিটি গুরুত্বপূর্ণ তথ্যভিত্তিক দাবির শেষে শুধু সেই উৎসের নম্বর দেবে, যেখানে দাবিটির প্রমাণ আছে। উদাহরণ: [১]
-3. কোনো উৎসে ব্যক্তি ও পদ একসঙ্গে স্পষ্ট না থাকলে তাকে সেই পদের ব্যক্তি বলবে না।
-4. উৎসের শিরোনাম, URL, সারাংশ, তারিখ বা উদ্ধৃতি কখনো কল্পনা করবে না।
-5. একটি সার্চ-result snippet-কে চূড়ান্ত প্রমাণ ভাববে না। সম্ভব হলে সরকারি, প্রাথমিক বা প্রতিষ্ঠানের নিজস্ব উৎসকে অগ্রাধিকার দেবে।
-6. অনুসন্ধানে যথেষ্ট প্রমাণ না থাকলে উত্তর শুরু করবে:
-   "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি।"
-7. পুরোনো সংবাদ দিয়ে বর্তমান পদ, বর্তমান দাম, বর্তমান দায়িত্ব বা বর্তমান পরিস্থিতি নিশ্চিত করবে না।
-8. ব্যবহারকারী যদি শুধু মতামত, ব্যাখ্যা, লেখা, অনুবাদ, গণিত, যুক্তি বা কোড চান, তখন সত্য ও অনুমানের পার্থক্য পরিষ্কার করবে।
-9. কোনো লিংক না থাকলে "সূত্র:" শিরোনাম লিখবে না।
-10. উৎস ব্যবহার করলে উত্তরের শেষে "### সূত্র" শিরোনামে শুধুমাত্র দেওয়া উৎসগুলোর আসল URL নম্বরসহ লিখবে।
+const SITE_BUILDER_PROMPT = `## ওয়েবসাইট ও ওয়েব অ্যাপ নির্মাতা (Production Grade)
+ব্যবহারকারী যেকোনো ওয়েবসাইট, landing page, ecommerce, portal, SaaS UI বা dashboard চাইলে:
+১. সম্পূর্ণ, self-contained, production-grade HTML/CSS/JS কোড দেবে।
+২. single-file HTML solution: <!DOCTYPE html>... </html> একক ব্লকে।
+৩. modern UI/UX:
+   - Tailwind CDN
+   - Font Awesome
+   - Google Fonts
+   - glassmorphism, gradients, buttons, cards, mobile-first layout
+   - dark/light toggle
+4. feature sections:
+   - premium hero
+   - stats counters
+   - feature grid
+   - pricing
+   - product catalog
+   - cart/checkout simulation
+   - testimonials
+   - FAQ
+   - contact form
+5. JS logic: functional interactions only, no dummy buttons.
+6. images: picsum seed based or remote.
+7. code block-এর ঠিক পরে একলাইনে "নিচে লাইভ লিংক দেওয়া হয়েছে..." লেখবে না।
+`;
 
-### উচ্চ-ঝুঁকির তথ্য
-নিচের বিষয়গুলোতে যাচাইকৃত উৎস ছাড়া সুনির্দিষ্ট উত্তর দেওয়া নিষিদ্ধ:
-- ব্যক্তি, চেয়ারম্যান, এমপি, মন্ত্রী, কর্মকর্তা, শিক্ষক, প্রতিষ্ঠানপ্রধান বা কোনো বর্তমান পদধারীর নাম
-- বর্তমান খবর, নির্বাচন, ফলাফল, বাজারদর, রেট, আবহাওয়া, আইন, নীতি, সংস্করণ বা প্রকাশিত তথ্য
-- রোগ নির্ণয়, ওষুধের ডোজ, আইনি সিদ্ধান্ত, বিনিয়োগ বা আর্থিক পরামর্শ
-- কুরআনের আয়াত, হাদিস, সূত্র, নম্বর, ফতোয়া বা ইসলামি বিধান
-- স্থানীয় ইউনিয়ন, উপজেলা, জেলা, প্রতিষ্ঠান, স্কুল, হাসপাতাল বা সরকারি সেবার তথ্য
+const INTEGRITY = `
+## সততা, নিরাপত্তা ও নিয়ন্ত্রণ প্রোটোকল
+- ভুল বা অবিশ্বাস্য তথ্য দেবে না।
+- নিরাপত্তা নিশ্চিত করবে: XSS, injection, SSRF, prompt injection, key leak এড়াবে।
+- কোনো secret, password, bank info, API key প্রকাশ করবে না।
+- অপ্রয়োজনীয় emoji, noisy formatting এড়াবে।
+- কোড clean, typed, and production-safe রাখবে।
+- ব্যবহারকারীকে সহজ, পরিষ্কার ও নির্ভরযোগ্য উত্তর দেবে।
+`;
 
-প্রমাণ অপর্যাপ্ত হলে সুন্দর শোনানোর জন্য অনুমান করবে না। সংক্ষিপ্ত, সৎ ও স্পষ্ট উত্তর দেবে।`;
-
-// Stripe, Vercel ও Apple মানের আধুনিক ওয়েব বিল্ডার প্রম্পট
-const SITE_BUILDER_PROMPT = `## মেগা ওয়েবসাইট ও ওয়েব অ্যাপ্লিকেশন ইঞ্জিন (Stripe & Apple Production Grade)
-ব্যবহারকারী যেকোনো ওয়েবসাইট, ল্যান্ডিং পেজ, ই-কমার্স বা পোর্টাল চাইলে নিচের নিয়মগুলো নিখুঁতভাবে মানবে:
-১. পূর্ণাঙ্গ ও স্বয়ংসম্পূর্ণ কোড: ব্যবহারকারীর প্রয়োজন অনুযায়ী একটি সম্পূর্ণ, আধুনিক ও বিশ্বমানের সিঙ্গেল-ফাইল HTML তৈরি করবে। কোনো অংশ সংক্ষিপ্ত বা অসম্পূর্ণ রাখবে না ("// বাকি কোড...", "...", খালি ফাংশন সম্পূর্ণ নিষিদ্ধ)।
-২. সিঙ্গেল ফাইল আর্কিটেকচার: \`<!DOCTYPE html>\` থেকে \`</html>\` পর্যন্ত একটিমাত্র \`\`\`html কোড ব্লকে সম্পূর্ণ কোড দেবে।
-৩. আধুনিক ডিজাইন সিস্টেম (Modern UI/UX):
-   - হেডারে Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>)
-   - FontAwesome 6 আইকন CDN (<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">)
-   - Google Fonts (Hind Siliguri ও Inter ফন্ট)
-   - মডার্ন গ্লাস-মরফিজম (backdrop-blur, border-white/20, subtle gradient), ডার্ক ও লাইট মোড টগল, এবং মোবাইল সাইডবার ড্রয়ার ন্যাভবার শতভাগ কার্যকর থাকবে।
-৪. প্রয়োজনীয় সমৃদ্ধ সেকশনসমূহ:
-   - প্রিমিয়াম হিরো সেকশন (অ্যানিমেটেড স্ট্যাটাস ব্যাজ, জোরালো হেডলাইন, অ্যাকশন বাটন)
-   - ইন্টারঅ্যাক্টিভ লাইভ পরিসংখ্যান কাউন্টার
-   - ফিচার ও সার্ভিস গ্রিড (হোভার লিফট ইফেক্ট সহ)
-   - ক্যাটাগরি ফিল্টার সহ পণ্য বা সেবা ক্যাটালগ
-   - সম্পূর্ণ কার্যকর ই-কমার্স কার্ট (Add to cart, পরিমাণ পরিবর্তন, রিয়েল-টাইম ৳ যোগ-বিয়োগ, localStorage-এ ডেটা সেভ)
-   - বিকাশ/নগদ পেমেন্ট সিমুলেশন ও অর্ডার কনফার্মেশন মডাল
-   - টেস্টিমোনিয়াল ও রিভিউ গ্রিড, প্রায়শ জিজ্ঞাসিত প্রশ্ন (FAQ অ্যাকর্ডিয়ন)
-   - ইনপুট ভ্যালিডেশন সহ কন্টাক্ট ফর্ম এবং মেগা ফুটার।
-৫. ইন্টারঅ্যাক্টিভ জাভাস্ক্রিপ্ট: পেজে কোনো ডামি বাটন বা অকেজো লিঙ্ক থাকবে না। প্রতিটি বাটন, মোডাল, ট্যাব ও কার্ট জাভাস্ক্রিপ্টে সত্যিই কাজ করবে। পেজ রিলোড দিলেও যেন কার্টের ডেটা না মুছে সেজন্য localStorage ব্যবহার করবে।
-৬. ছবি: \`https://picsum.photos/seed/<প্রাসঙ্গিক-ইংরেজি-শব্দ>/1200/800\` ব্যবহার করবে।
-৭. সমাপ্তি নির্দেশ: কোড ব্লকের ঠিক পরে কেবল এক লাইনে বলবে: "নিচে লাইভ লিংক দেওয়া হলো।"`;
-
-const INTEGRITY = `\n\n## সততা, নিরাপত্তা ও নিয়ন্ত্রণ প্রোটোকল
-- হাদিস/আয়াত/কিতাব নম্বর নিশ্চিত হলে দেবে; না হলে বলবে "নির্দিষ্ট নম্বর নিশ্চিত নই, মূল কিতাবে যাচাই করুন"।
-- তথ্যের নিশ্চয়তা স্পষ্ট করবে: নিশ্চিত / সম্ভাব্য / অনিশ্চিত।
-- কোডে এজ-কেস, মেমোরি লিক, নিরাপত্তা (XSS, Injection) এড়িয়ে চলবে এবং সর্বদা কার্যকর কোড দেবে।
-- পাসওয়ার্ড, ব্যাংক তথ্য বা এপিআই গোপন চাবি কখনো চাইবে না বা উত্তরে প্রকাশ করবে না।
-- উত্তরে সস্তা ইমোজি বা চটুল অলঙ্কার ব্যবহার করবে না; পরিচ্ছন্ন ও পেশাদার প্রাতিষ্ঠানিক উপস্থাপনা দেবে।
-
-## ফলো-আপ প্রশ্ন (বাধ্যতামূলক ৩টি)
-প্রতিটি উত্তরের একেবারে শেষে ব্যবহারকারী পরবর্তীতে জিজ্ঞেস করতে পারেন এমন ঠিক ৩টি প্রাসঙ্গিক প্রশ্ন নিচের নির্দিষ্ট ফরম্যাটে আলাদা লাইনে দেবে:
-[[প্রশ্ন: প্রথম প্রশ্ন]]
-[[প্রশ্ন: দ্বিতীয় প্রশ্ন]]
-[[প্রশ্ন: তৃতীয় প্রশ্ন]]`;
-
-
-// ---------------------------------------------------------------------
-// অতিরিক্ত নির্দেশিকা (গ্রুপ ২, ৩, ৪, ৫-এর প্রম্পট-স্তরের নিয়ম)
-// ---------------------------------------------------------------------
-const ISLAMIC_GUARD = `\n\n## ইসলামিক জ্ঞান ও সততা গার্ডরেল (কঠোর)
-- [#21] কোনো হাদিস, আয়াত, কিতাবের নাম বা নম্বর কখনো বানাবে না। নিশ্চিত না হলে স্পষ্ট বলবে: "এই বর্ণনার নির্ভরযোগ্য সূত্র আমি নিশ্চিত করতে পারছি না।"
-- [#22] কুরআন, সহিহ বুখারি, সহিহ মুসলিম ও অন্যান্য প্রসিদ্ধ সুনান গ্রন্থ এবং স্বীকৃত ফিকহ গ্রন্থকে অগ্রাধিকার দেবে; দুর্বল (যঈফ) বর্ণনা হলে তা উল্লেখ করবে।
-- [#23] মতভেদপূর্ণ বিষয়ে প্রধান মাযহাবগুলোর মত ভারসাম্যপূর্ণভাবে তুলে ধরবে; একটি মতকে একমাত্র সত্য বলে চাপিয়ে দেবে না।
-- [#24] তালাক, উত্তরাধিকার বণ্টন, ব্যক্তিগত জটিল মাসআলা বা স্পর্শকাতর ফতোয়ায় সাধারণ জ্ঞান দেবে, তবে চূড়ান্ত সিদ্ধান্তের জন্য অভিজ্ঞ মুফতির পরামর্শ নিতে বলবে।
-- [#25] ব্যবহারকারী সালাম দিলে উত্তর শুরু করবে "ওয়ালাইকুমুস সালাম ওয়া রাহমাতুল্লাহ" দিয়ে; সালাম না দিলে নিজে থেকে প্রতিবার সালাম দেবে না।
-- [#26] নামাজের ওয়াক্ত বা কিবলার দিক অনুমান করে মিনিট/ডিগ্রি বলবে না; অ্যাপের "সালাত" পাতায় অবস্থানভিত্তিক হিসাব দেখতে বলবে, অথবা অনুসন্ধানে পাওয়া নির্দিষ্ট তথ্য উৎসসহ দেবে।
-- [#27] শিরক, বিদআত ও কুসংস্কারের (তাবিজ-ভাগ্যগণনা ইত্যাদি) পক্ষে কিছু বলবে না; দলিলসহ বিনয়ের সাথে সতর্ক করবে।
-- [#28] আয়াত উদ্ধৃত করলে মূল আরবি, বাংলা অনুবাদ এবং সূরা:আয়াত নম্বর দেবে — শুধু তখনই, যখন নিশ্চিত।
-- [#29] আরবি পরিভাষা (যেমন সালাত, যাকাত, সাওম) সঠিক বানানে লিখবে, প্রয়োজনে প্রথমবার বন্ধনীতে অর্থ দেবে।
-- [#30] ভাষা হবে বিনয়ী, প্রজ্ঞাপূর্ণ ও সম্মানজনক; কাউকে কাফির/ফাসিক বলে আক্রমণ করবে না।`;
-
-const GROUNDING_RULES = `\n\n## তথ্য যাচাই ও সততা (কঠোর)
-- [#12] উত্তরের প্রতিটি তথ্যভিত্তিক দাবি নিচের "অনুসন্ধানের উৎস" অংশ বা তোমার নিশ্চিত জ্ঞানের ওপর দাঁড়াবে; উৎসের সাথে না মিললে সেই দাবি দেবে না।
-- [#16] ব্যবহারকারীর প্রশ্নে কোনো ভুল ধারণা বা ভুয়া তথ্য থাকলে উত্তরের শুরুতেই বিনয়ের সাথে "সংশোধন:" লিখে তা ধরিয়ে দেবে।
-- [#17] উৎসে তথ্য না থাকলে এবং তুমি নিশ্চিত না হলে অনুমান করবে না; স্পষ্ট লিখবে: "এ বিষয়ে নির্ভরযোগ্য তথ্য পাওয়া যায়নি।"
-- [#20][#48] উৎস ব্যবহার করলে বাক্যের শেষে [১], [২] এভাবে ফুটনোট দেবে, এবং উত্তরের শেষে (ফলো-আপ প্রশ্নের আগে) "### সূত্র" শিরোনামে নম্বরসহ শিরোনাম ও লিংক দেবে। উৎসে নেই এমন লিংক বানাবে না।`;
-
-const CODE_RULES = `\n\n## কোডিং ও অ্যাপ বিল্ডার নিয়ম
-- [#31] সম্পূর্ণ কোড দেবে; "// বাকি কোড", "...", "TODO" জাতীয় অসম্পূর্ণ অংশ নিষিদ্ধ।
-- [#32] একাধিক ফাইল হলে প্রতিটি কোড ব্লকের আগের লাইনে আপেক্ষিক পাথ (যেমন src/App.tsx) লিখবে।
-- [#33] একক পেজ ওয়েবসাইট চাইলে HTML+CSS+JS একটি পূর্ণ \`\`\`html ব্লকে দেবে, যাতে সরাসরি প্রিভিউ চলে।
-- [#34] TypeScript-এ সঠিক টাইপ, সব import ও বন্ধনী মিলিয়ে সিনট্যাক্স-নির্ভুল কোড দেবে।
-- [#35] প্রয়োজনীয় ইনস্টল, টেস্ট ও ডিপ্লয় কমান্ড আলাদা bash ব্লকে দেবে।
-- [#36] ব্যবহারকারী বিদ্যমান কোড দিলে শুধু প্রয়োজনীয় অংশ বদলাবে, বাকি হুবহু রাখবে।
-- [#37] গোপন কী কোডে হার্ডকোড করবে না; .env / environment variable ব্যবহার দেখাবে।
-- [#38] UI কোড মোবাইল-প্রথম ও রেসপনসিভ হবে।
-- [#39] শুধু স্থিতিশীল, প্রচলিত লাইব্রেরি সংস্করণ ব্যবহার করবে; অস্তিত্বহীন প্যাকেজ বা API বানাবে না।
-- [#40] মাল্টি-ফাইল প্রজেক্টে পাথ-চিহ্নিত ব্লক দেবে, যাতে অ্যাপের "প্রজেক্ট ফাইল" ও ZIP ডাউনলোড কাজ করে।`;
-
-const STYLE_RULES = `\n\n## উত্তরের ধরন
-- [#43] ছোট/সাধারণ প্রশ্নে সরাসরি ১–৩ বাক্যে উত্তর দেবে; অপ্রয়োজনীয় ভূমিকা দেবে না।
-- [#45] চাটুকারিতা বর্জন: "চমৎকার প্রশ্ন" জাতীয় প্রশংসা দিয়ে শুরু করবে না; ব্যবহারকারী ভুল হলে সম্মানের সাথে সত্যটা বলবে।
-- [#46] ছবি/ডকুমেন্ট দেওয়া হলে প্রথমে লেখাগুলো হুবহু পাঠোদ্ধার (OCR) করবে, তারপর বিশ্লেষণ; ছবিতে যা নেই তা বানাবে না।`;
-
-// ---------------------------------------------------------------------
-// মডেল ক্যাটাগরি ম্যাপিং [#3] ও স্মার্ট আপগ্রেড/ডাউনগ্রেড [#7]
-// ---------------------------------------------------------------------
-export type TaskKind = "quick" | "general" | "code" | "engineer";
+const STYLE_RULES = `
+## উত্তরের ধরন
+- ছোট/সাধারণ প্রশ্নে ১–৩ বাক্যে উত্তর দেবে।
+- অতিরিক্ত ভূমিকা, চাটুকারিতা, “চমৎকার প্রশ্ন” ইত্যাদি বর্জন করবে।
+- ডকুমেন্ট/ছবি দেওয়া হলে OCR/পাঠোদ্ধার আগে না গিয়ে, তা ব্যবহার করবে।
+- উত্তর clear, concise, professional.
+`;
 
 const GOOGLE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -200,7 +149,6 @@ export const GOOGLE_CHAINS: Record<TaskKind, string[]> = {
   quick: ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3-flash-preview"],
   general: ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"],
   code: ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"],
-  // মালিকের নির্দেশ: ইঞ্জিনিয়ার মোড শুধু গুগল কী — Pro → 3.8 Flash → 3 Flash Preview
   engineer: ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3-flash-preview"],
 };
 
@@ -211,14 +159,19 @@ const GATEWAY_CHAINS: Record<TaskKind, string[]> = {
   engineer: [],
 };
 
-export function classifyTask(text: string, opts: { engineer: boolean; site: boolean; code: boolean; hasImage: boolean }): TaskKind {
+export function classifyTask(
+  text: string,
+  opts: { engineer: boolean; site: boolean; code: boolean; hasImage: boolean },
+): TaskKind {
   if (opts.engineer) return "engineer";
   if (opts.site || opts.code) return "code";
-  if (!opts.hasImage && text.length < 300 && !/ফতোয়া|মাসআলা|অংক|গণিত|ব্যাখ্যা|বিস্তারিত|তুলনা|বিশ্লেষণ|explain|compare/i.test(text)) return "quick";
+
+  const shortQuestionLike = !opts.hasImage && text.length < 300 && !/ফতোয়া|মাসআলা|অংক|গণিত|ব্যাখ্যা|বিস্তারিত|তুলনা|বিশ্লেষণ|latest|current|news|price|rate|official|status/i.test(text);
+
+  if (shortQuestionLike) return "quick";
   return "general";
 }
 
-// [#44] কোডিংয়ে বড় টোকেন বাজেট, ছোট প্রশ্নে ছোট
 export function tokenBudget(kind: TaskKind, site: boolean): number {
   if (site) return 32768;
   if (kind === "code" || kind === "engineer") return 16384;
@@ -226,17 +179,13 @@ export function tokenBudget(kind: TaskKind, site: boolean): number {
   return 6144;
 }
 
-// [#2][#41] প্রথম অক্ষর আসার সময়সীমা — এর মধ্যে না এলে পরের মডেলে সুইচ
 export function firstTokenBudget(kind: TaskKind, pass: 1 | 2): number {
-  if (pass === 2) return 25000; // [#49] শেষ চেষ্টায় ধৈর্যশীল টাইমআউট
+  if (pass === 2) return 25000;
   return kind === "quick" || kind === "general" ? 3500 : 9000;
 }
 
-// ---------------------------------------------------------------------
-// লোড-সচেতন কুলডাউন [#1][#7] ও রাউন্ড-রবিন কাউন্টার [#4]
-// ---------------------------------------------------------------------
-const cooldown = new Map<string, number>(); // model|keyId -> until
-const deadKeys = new Map<string, number>(); // keyId -> until (401/403)
+const cooldown = new Map<string, number>();
+const deadKeys = new Map<string, number>();
 let rrCounter = 0;
 
 function keyId(key: string): string {
@@ -251,15 +200,75 @@ export function rotate<T>(list: T[], start: number): T[] {
   return [...list.slice(s), ...list.slice(0, s)];
 }
 
-type Attempt = { url: string; key: string; model: string; label: string; google: boolean };
+type Attempt = {
+  url: string;
+  key: string;
+  model: string;
+  label: string;
+  google: boolean;
+};
 
 function isCooling(a: Attempt, now = Date.now()) {
   return (cooldown.get(a.model + "|" + keyId(a.key)) ?? 0) > now || (deadKeys.get(keyId(a.key)) ?? 0) > now;
 }
 
-// ---------------------------------------------------------------------
-// লোকাল ক্যাশ [#10]: সেটিংস (৪৫ সে.), সার্চ (৫ মি.), ছোট প্রশ্নের উত্তর (১০ মি.)
-// ---------------------------------------------------------------------
+function cleanKey(value?: string | null): string {
+  return (value ?? "").trim().replace(/^["']|["']$/g, "");
+}
+
+function getAllowedCustomProviders(): Set<string> {
+  const raw = (process.env["ALLOWED_CUSTOM_PROVIDER_HOSTS"] ?? "").trim();
+  if (!raw) return new Set(["api.openai.com", "api.anthropic.com"]);
+  return new Set(raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+}
+
+function isBlockedHost(host: string): boolean {
+  const h = host.toLowerCase().trim().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h === "metadata.google.internal") return true;
+  if (h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc00:") || h.startsWith("fd") || h.startsWith("::ffff:")) return true;
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
+
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+  }
+  return false;
+}
+
+function isAllowedCustomBaseUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") return false;
+    if (isBlockedHost(url.hostname)) return false;
+    if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) return false;
+    if (url.port && !["80", "443"].includes(url.port)) return false;
+
+    const allow = getAllowedCustomProviders();
+    const host = url.hostname.toLowerCase();
+
+    if (allow.size > 0 && !allow.has(host)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCustomEndpoint(rawUrl?: string): string | null {
+  if (!rawUrl) return null;
+  const base = rawUrl.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(base)) return null;
+  if (!isAllowedCustomBaseUrl(base)) return null;
+  return `${base}/chat/completions`;
+}
+
 let cachedSettings: { data: any; time: number } | null = null;
 let cachedKeys: { data: any; time: number } | null = null;
 const searchCache = new Map<string, { at: number; value: SearchResult }>();
@@ -267,29 +276,32 @@ const answerCache = new Map<string, { at: number; text: string }>();
 
 function cacheSet<V>(map: Map<string, V>, k: string, v: V, max = 100) {
   map.set(k, v);
-  if (map.size > max) map.delete(map.keys().next().value as string);
+  if (map.size > max) {
+    const first = map.keys().next().value as string;
+    if (first) map.delete(first);
+  }
 }
 
 async function getCachedSettingsAndKeys(supabaseAdmin: any) {
   const now = Date.now();
   const needSettings = !cachedSettings || now - cachedSettings.time > 45_000;
   const needKeys = !cachedKeys || now - cachedKeys.time > 45_000;
+
   try {
     const [sRes, kRes] = await Promise.all([
       needSettings ? supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedSettings!.data }),
       needKeys ? supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedKeys!.data }),
     ]);
+
     if (needSettings && sRes?.data) cachedSettings = { data: sRes.data, time: now };
     if (needKeys && kRes?.data) cachedKeys = { data: kRes.data, time: now };
   } catch (err) {
-    console.error("[chat] settings cache lookup failed:", err); // [#9]
+    console.error("[chat] settings cache lookup failed:", err);
   }
+
   return { s: cachedSettings?.data, keys: cachedKeys?.data };
 }
 
-// ---------------------------------------------------------------------
-// রাউট
-// ---------------------------------------------------------------------
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -297,7 +309,7 @@ export const Route = createFileRoute("/api/chat")({
         try {
           return await handleChat(request);
         } catch (e) {
-          console.error("[chat] critical engine exception:", e); // [#9]
+          console.error("[chat] critical engine exception:", e);
           return new Response("সার্ভারে সাময়িক সমস্যা হয়েছে। কয়েক সেকেন্ড পর আবার চেষ্টা করুন।", { status: 500 });
         }
       },
@@ -311,15 +323,22 @@ async function handleChat(request: Request): Promise<Response> {
 
   const supabaseUrl = process.env["SUPABASE_URL"];
   const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  if (!supabaseUrl || !supabaseKey) return new Response("সার্ভার কনফিগারেশন অসম্পূর্ণ", { status: 500 });
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response("সার্ভার কনফিগারেশন অসম্পূর্ণ", { status: 500 });
+  }
 
   const pub = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
   const [authRes, rawJson] = await Promise.all([pub.auth.getUser(token), request.json().catch(() => null)]);
   const { data: u, error: ue } = authRes;
-  if (ue || !u?.user) return new Response("ব্যবহারকারী চিহ্নিত করা যায়নি। পুনরায় লগইন করুন।", { status: 401 });
+  if (ue || !u?.user) {
+    return new Response("ব্যবহারকারী চিহ্নিত করা যায়নি। পুনরায় লগইন করুন।", { status: 401 });
+  }
 
   const parsed = Body.safeParse(rawJson);
-  if (!parsed.success) return new Response("ইনপুট যাচাইয়ে ত্রুটি", { status: 400 });
+  if (!parsed.success) {
+    return new Response("ইনপুট যাচাইয়ে ত্রুটি", { status: 400 });
+  }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const uid = u.user.id;
@@ -330,8 +349,9 @@ async function handleChat(request: Request): Promise<Response> {
     const m = msgsIn[i];
     return [...(m?.images ?? []), ...(m?.image ? [m.image] : [])].slice(0, 5);
   };
+
   const hasImage = msgsIn.some((_, i) => imgsOf(i).length > 0);
-  const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|web page|পেজ বানা|অ্যাপ বানা|স্টোর বানা|বিল্ডার/i.test(lastMsgText);
+  const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|web page|পেজ বানা|অ্যাপ বানা|স্টোর বানা|ইকমার্স|ecommerce|dashboard|admin panel|app design|landing page/i.test(lastMsgText);
   const isEngineer = parsed.data.mode === "engineer";
   const isCode = needsCodeEngine(lastMsgText, isSiteReq);
   const kind = classifyTask(lastMsgText, { engineer: isEngineer, site: isSiteReq, code: isCode, hasImage });
@@ -339,7 +359,6 @@ async function handleChat(request: Request): Promise<Response> {
   const hourAgo = new Date(Date.now() - 3600_000).toISOString();
   const dayAgo = new Date(Date.now() - 86400_000).toISOString();
 
-  // [#42] দীর্ঘমেয়াদী মেমোরি ও সাম্প্রতিক প্রসঙ্গ — সমান্তরালে
   const memTask = (async () => {
     try {
       const mem = await import("@/lib/memory.server");
@@ -356,9 +375,11 @@ async function handleChat(request: Request): Promise<Response> {
     }
   })();
 
-  // [#22] ডাটাবেসের যাচাইকৃত ফতোয়া
   const fatwaTask = (async () => {
-    if (!/ফতোয়া|মাসআলা|রোজা|নামাজ|সালাত|হাদিস|কুরআন|কোরআন|হারাম|হালাল|যাকাত|কসর|সুদ|অজু|গোসল|হজ/i.test(lastMsgText)) return "";
+    if (!/ফতোয়া|মাসআলা|রোজা|নামাজ|সালাত|হাদিস|কুরআন|কোরআন|হারাম|হালাল|যাকাত|কসর|সুন্নাহ|ইসলাম/i.test(lastMsgText)) {
+      return "";
+    }
+
     try {
       const { findFatwas, fatwaPrompt } = await import("@/lib/fatwa.server");
       const fatwas = await findFatwas(lastMsgText);
@@ -374,13 +395,14 @@ async function handleChat(request: Request): Promise<Response> {
     supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", hourAgo),
     supabaseAdmin.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", uid).gte("created_at", dayAgo),
   ]);
+
   const { s, keys } = settingsAndKeys;
   const isAdmin = !!adminCheck.data;
 
-  // [#50] অ্যাডমিন কন্ট্রোল: চ্যাট চালু/বন্ধ ও সীমা
   if (s && s.chat_enabled === false && !isAdmin) {
     return new Response("চ্যাট সাময়িকভাবে বন্ধ আছে। কিছুক্ষণ পর আবার চেষ্টা করুন।", { status: 503 });
   }
+
   if (!isAdmin) {
     if ((hourlyUsage.count ?? 0) >= (s?.hourly_limit ?? 60)) {
       return new Response(`এক ঘণ্টার প্রশ্ন সীমা (${s?.hourly_limit ?? 60}টি) শেষ। কিছুক্ষণ পর আবার চেষ্টা করুন।`, { status: 429 });
@@ -389,76 +411,124 @@ async function handleChat(request: Request): Promise<Response> {
       return new Response(`আজকের দৈনিক ব্যবহারের সীমা (${s?.daily_limit ?? 300}টি) শেষ। আগামীকাল আবার চেষ্টা করুন।`, { status: 429 });
     }
   }
-  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
 
-  // ---- কী সংগ্রহ [#4][#5 ফ্রি কী অগ্রাধিকার] ----
+  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).catch(() => {});
+
   type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
+
   const pool: PoolKey[] = (Array.isArray(keys?.key_pool) ? (keys.key_pool as PoolKey[]) : [])
     .filter((p) => p && p.active !== false && typeof p.key === "string" && p.key.trim())
     .slice(0, 2);
-  const clean = (k?: string | null) => (k ?? "").trim().replace(/^["']|["']$/g, "");
-  const googleKeys = [...new Set([clean(keys?.google_key) || clean(process.env["GOOGLE_API_KEY"]), ...pool.filter((p) => !p.provider || p.provider === "google").map((p) => clean(p.key))].filter(Boolean))];
-  const openaiKey = clean(keys?.openai_key) || clean(process.env["OPENAI_API_KEY"]);
-  const gatewayKey = process.env["LOVABLE_API_KEY"] || "";
 
+  const googleKeys = [...new Set(
+    [
+      cleanKey(keys?.google_key) || cleanKey(process.env["GOOGLE_API_KEY"]),
+      ...pool.filter((p) => !p.provider || p.provider === "google").map((p) => cleanKey(p.key)),
+    ].filter(Boolean),
+  )];
+
+  const openaiKey = cleanKey(keys?.openai_key) || cleanKey(process.env["OPENAI_API_KEY"]);
+  const gatewayKey = cleanKey(process.env["LOVABLE_API_KEY"]);
   const userModel = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : "";
   const adminProvider = String(s?.provider ?? "google");
   const adminModel = String(s?.model ?? "").trim();
 
   const attempts: Attempt[] = [];
   const add = (a: Attempt) => {
-    if (!attempts.some((x) => x.url === a.url && x.key === a.key && x.model === a.model)) attempts.push(a);
+    if (!attempts.some((x) => x.url === a.url && x.key === a.key && x.model === a.model)) {
+      attempts.push(a);
+    }
   };
+
   const googleChain = [...GOOGLE_CHAINS[kind]];
-  if (!isEngineer && adminProvider === "google" && adminModel.startsWith("gemini-3")) googleChain.unshift(adminModel); // [#50]
-  const rotatedGoogle = rotate(googleKeys, rrCounter++); // [#4] রাউন্ড-রবিন
+  if (!isEngineer && adminProvider === "google" && adminModel.startsWith("gemini-3")) {
+    googleChain.unshift(adminModel);
+  }
+
+  const rotatedGoogle = rotate(googleKeys, rrCounter++);
 
   if (isEngineer) {
-    for (const model of googleChain) for (const key of rotatedGoogle) add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+    for (const model of googleChain) {
+      for (const key of rotatedGoogle) {
+        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+      }
+    }
   } else {
-    // [#50] ব্যবহারকারী/অ্যাডমিন গেটওয়ে মডেল বেছে নিলে সেটি আগে
-    const preferGateway = gatewayKey && (userModel || adminProvider === "lovable");
-    if (preferGateway) add({ url: GATEWAY_URL, key: gatewayKey, model: userModel || adminModel || GATEWAY_CHAINS[kind][0]!, label: "gateway:preferred", google: false });
-    if (adminProvider === "openai" && openaiKey) add({ url: OPENAI_URL, key: openaiKey, model: adminModel || "gpt-4o", label: "openai:admin", google: false });
-    // [#3] ক্যাটাগরি অনুযায়ী গুগল চেইন, প্রতিটি মডেল সব কীতে ঘুরিয়ে
-    for (const model of googleChain) for (const key of rotatedGoogle) add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+    const preferGateway = Boolean(gatewayKey) && (Boolean(userModel) || adminProvider === "lovable");
+    if (preferGateway) {
+      add({
+        url: GATEWAY_URL,
+        key: gatewayKey,
+        model: userModel || adminModel || GATEWAY_CHAINS[kind][0]!,
+        label: "gateway:preferred",
+        google: false,
+      });
+    }
+
+    if (adminProvider === "openai" && openaiKey) {
+      add({ url: OPENAI_URL, key: openaiKey, model: adminModel || "gpt-4o", label: "openai:admin", google: false });
+    }
+
+    for (const model of googleChain) {
+      for (const key of rotatedGoogle) {
+        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+      }
+    }
+
     for (const p of pool) {
-      const key = clean(p.key);
-      if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
-        add({ url: p.base_url.replace(/\/$/, "") + "/chat/completions", key, model: p.model?.trim() || "llama-3.3-70b-versatile", label: `custom:${p.name ?? ""}`, google: false });
+      const key = cleanKey(p.key);
+      if (!key) continue;
+
+      const customUrl = normalizeCustomEndpoint(p.base_url);
+      if (p.provider === "custom" && customUrl) {
+        add({
+          url: customUrl,
+          key,
+          model: p.model?.trim() || "llama-3.3-70b-versatile",
+          label: `custom:${p.name ?? ""}`,
+          google: false,
+        });
       } else if (p.provider === "openai") {
         add({ url: OPENAI_URL, key, model: p.model?.trim() || "gpt-4o", label: `openai-pool:${p.name ?? ""}`, google: false });
       }
     }
-    if (openaiKey) add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
-    if (gatewayKey) for (const model of GATEWAY_CHAINS[kind]) add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
+
+    if (openaiKey) {
+      add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
+    }
+
+    if (gatewayKey) {
+      for (const model of GATEWAY_CHAINS[kind]) {
+        add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
+      }
+    }
   }
 
   if (!attempts.length) {
-    return new Response("কোনো এআই কী সেট করা নেই। অ্যাডমিন প্যানেলে গুগল এআই কী বসান।", { status: 503 });
+    return new Response("কোনো এআই কী সেট করা নেই। অ্যাডমিন প্যানেলে গুগল/ওপেনএআই কী বসান।", { status: 503 });
   }
-  // [#7] লোড-সচেতন: কুলডাউনে থাকা মডেল/কী পেছনে পাঠানো
+
   attempts.sort((a, b) => Number(isCooling(a)) - Number(isCooling(b)));
 
   const lastImgs = imgsOf(msgsIn.length - 1);
   const wantImg = !lastImgs.length && wantsImage(lastMsgText) && !!gatewayKey;
+
   const verification = assessVerificationNeed(lastMsgText, {
-  isEngineer,
-  isSiteReq,
-  isCode,
-  hasImage,
-});
+    isEngineer,
+    isSiteReq,
+    isCode,
+    hasImage,
+  });
 
-const shouldSearch = verification.search;
-const cacheKey =
-  kind === "quick" &&
-  !hasImage &&
-  !shouldSearch &&
-  msgsIn.length === 1
-    ? `${uid}|${lastMsgText.trim().toLowerCase()}`
-    : "";
+  const shouldSearch = verification.search;
+  const cacheKey =
+    kind === "quick" &&
+    !hasImage &&
+    !shouldSearch &&
+    msgsIn.length === 1
+      ? `${uid}|${lastMsgText.trim().toLowerCase()}`
+      : "";
 
-  // ---- লাইভ স্ট্রিম [#5][#6][#47] ----
   const enc = new TextEncoder();
   const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
   const clientGone = new AbortController();
@@ -466,6 +536,7 @@ const cacheKey =
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
+
       const push = (v: Uint8Array) => {
         if (closed) return;
         try {
@@ -474,10 +545,12 @@ const cacheKey =
           closed = true;
         }
       };
+
       const stage = (st: string) => push(sse({ stage: st }));
       const say = (text: string) => push(sse({ choices: [{ delta: { content: text } }] }));
-      // [#6] প্রতি ৮ সেকেন্ডে keep-alive মন্তব্য (ক্লায়েন্ট "data:" ছাড়া লাইন উপেক্ষা করে)
+
       const ping = setInterval(() => push(enc.encode(": ping\n\n")), 8000);
+
       const finish = () => {
         clearInterval(ping);
         if (closed) return;
@@ -490,7 +563,6 @@ const cacheKey =
       try {
         stage("think");
 
-        // [#10] ছোট প্রশ্নের ক্যাশ থেকে তাৎক্ষণিক উত্তর
         const hit = cacheKey ? answerCache.get(cacheKey) : undefined;
         if (hit && Date.now() - hit.at < 600_000) {
           stage("write");
@@ -502,80 +574,79 @@ const cacheKey =
         if (wantImg) {
           stage("image");
           const img = await generateImage(lastMsgText);
-          say(img ? `আপনার ছবি তৈরি সম্পন্ন হয়েছে:\n\n![ছবি](${img})` : "ছবি তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে কয়েক সেকেন্ড পর আবার চেষ্টা করুন।");
+          say(img ? `আপনার ছবি তৈরি সম্পন্ন হয়েছে:\n\n![ছবি](${img})` : "ছবি তৈরি করতে সমস্যা হয়েছে।");
           push(enc.encode("data: [DONE]\n\n"));
           return finish();
         }
 
-        // ---- সিস্টেম প্রম্পট ----
         let system = PERSONA + "\n\n" + BASE_PROMPT;
         if (isSiteReq && s?.site_builder !== false) system += "\n\n" + SITE_BUILDER_PROMPT;
         if (isEngineer) system += "\n\n" + ENGINEER_PROMPT;
-        if (isCode || isSiteReq || isEngineer) system += "\n\n" + GPT_ENGINEER_PROMPT + CODE_RULES;
-        system += ISLAMIC_GUARD + STYLE_RULES;
+        if (isCode || isSiteReq || isEngineer) system += "\n\n" + GPT_ENGINEER_PROMPT;
+        system += "\n\n" + STYLE_RULES + "\n\n" + INTEGRITY;
 
-        // [#15] বাংলাদেশ সময় ও তিন ক্যালেন্ডার
         const now = new Date();
         const bd = new Intl.DateTimeFormat("bn-BD", { timeZone: "Asia/Dhaka", dateStyle: "full", timeStyle: "short" }).format(now);
         let hijri = "";
         try {
           hijri = new Intl.DateTimeFormat("bn-BD-u-ca-islamic-umalqura", { timeZone: "Asia/Dhaka", dateStyle: "long" }).format(now);
         } catch {}
-        system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nবাংলাদেশ সময়: ${bd}${hijri ? `\nহিজরি তারিখ (উম্মুল কুরা হিসাব, স্থানীয় চাঁদ দেখার সাথে ১ দিন পার্থক্য হতে পারে): ${hijri}` : ""}\nISO: ${now.toISOString()}`;
+
+        system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nবাংলাদেশ সময়: ${bd}${hijri ? `\nহিজরি তারিখ: ${hijri}` : ""}`;
 
         const [mem, fatwaContext] = await Promise.all([memTask, fatwaTask]);
         if (fatwaContext) system += fatwaContext;
-        if (mem.items.length) system += `\n\n=== ব্যবহারকারী সম্পর্কে সংরক্ষিত তথ্য (স্মৃতি) ===\n${mem.items.map((m) => "- " + m.text).join("\n")}`;
-        if (mem.recent.length) system += `\n\n=== পূর্ববর্তী প্রাসঙ্গিক প্রশ্ন ===\n${[...mem.recent].reverse().map((r) => "- " + String(r.content).slice(0, 200).replace(/\s+/g, " ")).join("\n")}`;
+        if (mem.items.length) {
+          system += `\n\n=== ব্যবহারকারী সম্পর্কে সংরক্ষিত তথ্য (স্মৃতি) ===\n${mem.items.map((m) => `- ${String(m.text ?? "")}`).join("\n")}`;
+        }
+        if (mem.recent.length) {
+          system += `\n\n=== পূর্ববর্তী প্রাসঙ্গিক প্রশ্ন ===\n${[...mem.recent].reverse().map((r) => `- ${String(r.content ?? "")}`).join("\n")}`;
+        }
         if (s?.system_prompt?.trim()) system += `\n\n=== অতিরিক্ত সিস্টেম নির্দেশনা (অ্যাডমিন) ===\n${s.system_prompt.trim()}`;
         if (s?.admin_note?.trim()) system += `\n\n=== অ্যাডমিন নোট (সর্বোচ্চ অগ্রাধিকার) ===\n${s.admin_note.trim()}`;
         if (isAdmin) system += `\n\n[সেশন]: ব্যবহারকারী সিস্টেমের ভেরিফাইড অ্যাডমিন।`;
 
-        // [#13] ব্যবহারকারীর দেওয়া লিংক পড়া + [#11][#18] অটো-সার্চ — সমান্তরালে
         const textMsgs = msgsIn.map((m) => ({ role: m.role, content: m.content }));
         const wantsUrl = s?.url_reader !== false && /https?:\/\//.test(lastMsgText);
+
         if (shouldSearch) stage("search");
+
         const [web, found] = await Promise.all([
           wantsUrl ? readUrls(lastMsgText).catch(() => "") : Promise.resolve(""),
-          shouldSearch ? withTimeout(cachedSearch(lastMsgText), 4500, { text: "", count: 0 }) : Promise.resolve({ text: "", count: 0 }),
+          shouldSearch ? withTimeout(cachedSearch(lastMsgText), 4500, { text: "", count: 0, strongCount: 0, hasStrongEvidence: false }) : Promise.resolve({ text: "", count: 0, strongCount: 0, hasStrongEvidence: false }),
         ]);
+
         if (web) {
-          const last = textMsgs[textMsgs.length - 1]!;
-          textMsgs[textMsgs.length - 1] = { role: last.role, content: `${last.content}\n\n=== সংযুক্ত ওয়েব পেজের লেখা ===\n${web}` };
+          const last = textMsgs[textMsgs.length - 1];
+          if (last) {
+            textMsgs[textMsgs.length - 1] = { role: last.role, content: `${last.content}\n\n=== সংযুক্ত ওয়েব পেজের লেখা ===\n${web}` };
+          }
         }
+
         if (shouldSearch) {
-  stage("verify");
+          stage("verify");
 
-  // নাম, পদ, বর্তমান তথ্য, আইন, চিকিৎসা, ধর্মীয় সূত্র ইত্যাদিতে
-  // যথেষ্ট প্রমাণ না থাকলে মডেলকে অনুমানের সুযোগ দেওয়া হবে না।
-  if (verification.mustRefuseWithoutEvidence && !found.hasStrongEvidence) {
-    stage("write");
-    say(
-      "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি। " +
-        "নির্ভরযোগ্য সরকারি, প্রাতিষ্ঠানিক বা প্রাথমিক উৎস ছাড়া আমি নাম, পদ বা বর্তমান তথ্য অনুমান করে বলব না। " +
-        "প্রশ্নটি আরও নির্দিষ্ট করে দিন অথবা সংশ্লিষ্ট প্রতিষ্ঠানের অফিসিয়াল লিংক দিন।",
-    );
-    push(enc.encode("data: [DONE]\n\n"));
-    return finish();
-  }
+          if (verification.mustRefuseWithoutEvidence && !found.hasStrongEvidence) {
+            stage("write");
+            say(
+              "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি। নির্ভরযোগ্য সরকারি, প্রাতিষ্ঠানিক বা প্রাথমিক উৎস ছাড়া আমি নাম, পদ, অবস্থান, বর্তমান অবস্থা, আইন বা চিকিৎসা সম্পর্কিত সুনির্দিষ্ট দাবি করতে পারি না। প্রশ্নটি আরও নির্দিষ্ট করে দিন অথবা সংশ্লিষ্ট প্রতিষ্ঠানের অফিসিয়াল তথ্য যাচাই করুন।"
+            );
+            push(enc.encode("data: [DONE]\n\n"));
+            return finish();
+          }
 
-  system += GROUNDING_RULES + EVIDENCE_PROTOCOL;
-  system += found.count
-    ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===
-নিচের উৎসের বাইরে কোনো সুনির্দিষ্ট দাবি করা যাবে না। কোনো দাবির সঙ্গে উৎসের প্রমাণ না মিললে সেই দাবি বাদ দিতে হবে।
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
+          system += found.count
+            ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===\nনিচের উৎসের বাইরে কোনো সুনির্দিষ্ট দাবি করা যাবে না।\n\n${found.text}`
+            : `\n\n=== অনুসন্ধানের উৎস ===\nলাইভ অনুসন্ধানে নির্ভরযোগ্য ফল পাওয়া যায়নি। অনুমান করা নিষিদ্ধ। নিশ্চিত তথ্যের জন্য প্রামাণ্য ও প্রাথমিক উৎস দরকার।`;
+        } else if (web) {
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
+        }
 
-${found.text}`
-    : `\n\n=== অনুসন্ধানের উৎস ===
-লাইভ অনুসন্ধানে নির্ভরযোগ্য ফল পাওয়া যায়নি। অনুমান করা নিষিদ্ধ। নিশ্চিত তথ্য না থাকলে স্পষ্টভাবে বলবে: "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি।"`;
-} else if (web) {
-  system += GROUNDING_RULES + EVIDENCE_PROTOCOL;
-}
-
-system += INTEGRITY;
+        system += `\n\n${INTEGRITY}`;
 
         if (isCode || isSiteReq || isEngineer) stage("code");
 
-        // [#46] ছবি বিশ্লেষণ (মাল্টি-ইমেজ ভিশন)
         const msgs: { role: string; content: unknown }[] = textMsgs.map((m, i) => {
           const imgs = imgsOf(i);
           if (m.role !== "user" || !imgs.length) return m;
@@ -587,32 +658,37 @@ system += INTEGRITY;
 
         const basePayload = {
           stream: true,
-          temperature: isSiteReq ? 0.4 : 0.2, // [#8]
-          max_tokens: tokenBudget(kind, isSiteReq), // [#44]
+          temperature: isSiteReq ? 0.4 : 0.2,
+          max_tokens: tokenBudget(kind, isSiteReq),
           messages: [{ role: "system", content: system }, ...msgs],
         };
 
-        // ---- ফেইলওভার লুপ [#1][#2][#49] ----
         let opened: { reader: ReadableStreamDefaultReader<Uint8Array>; first: Uint8Array; label: string; abort: AbortController } | null = null;
         let lastErr = { status: 502, text: "" };
+
         for (const pass of [1, 2] as const) {
-          if (pass === 2) await new Promise((r) => setTimeout(r, 600)); // [#49] ব্যাকঅফ
+          if (pass === 2) await new Promise((r) => setTimeout(r, 600));
+
           for (const a of attempts) {
             if (closed || clientGone.signal.aborted) return finish();
             if ((deadKeys.get(keyId(a.key)) ?? 0) > Date.now()) continue;
             if (pass === 1 && isCooling(a) && attempts.some((x) => !isCooling(x))) continue;
+
             const r = await tryAttempt(a, basePayload, kind, firstTokenBudget(kind, pass), clientGone.signal);
             if (r.ok) {
               opened = { reader: r.reader, first: r.first, label: a.label, abort: r.abort };
               break;
             }
+
             lastErr = { status: r.status, text: r.text };
-            console.warn(`[chat] attempt ${a.label} pass${pass} failed [${r.status}] ${r.text.slice(0, 160)}`); // [#9]
+            console.warn(`[chat] attempt ${a.label} pass${pass} failed [${r.status}] ${r.text.slice(0, 160)}`);
+
             const ck = a.model + "|" + keyId(a.key);
             if (r.status === 401 || r.status === 403) deadKeys.set(keyId(a.key), Date.now() + 10 * 60_000);
             else if (r.status === 429 || r.status === 503 || r.status === 504) cooldown.set(ck, Date.now() + 30_000);
             else if (r.status === 404 || r.status === 400) cooldown.set(ck, Date.now() + 10 * 60_000);
           }
+
           if (opened) break;
         }
 
@@ -621,11 +697,11 @@ system += INTEGRITY;
           return finish();
         }
 
-        // ---- আপস্ট্রিম পাইপ + উত্তর সংগ্রহ (ক্যাশের জন্য) ----
         stage("write");
         const dec = new TextDecoder();
         let full = "";
         let buf = "";
+
         const collect = (chunk: Uint8Array) => {
           if (!cacheKey) return;
           buf += dec.decode(chunk, { stream: true });
@@ -640,10 +716,13 @@ system += INTEGRITY;
             } catch {}
           }
         };
+
         const onAbort = () => opened?.abort.abort();
         clientGone.signal.addEventListener("abort", onAbort);
+
         push(opened.first);
         collect(opened.first);
+
         try {
           while (!closed) {
             const { done, value } = await opened.reader.read();
@@ -651,14 +730,18 @@ system += INTEGRITY;
             push(value);
             collect(value);
           }
-          if (cacheKey && full.trim().length > 0 && full.length < 8000) cacheSet(answerCache, cacheKey, { at: Date.now(), text: full });
+
+          if (cacheKey && full.trim().length > 0 && full.length < 8000) {
+            cacheSet(answerCache, cacheKey, { at: Date.now(), text: full });
+          }
         } catch (e) {
           console.warn(`[chat] stream from ${opened.label} interrupted:`, e);
           push(sse({ error: "সংযোগ মাঝপথে বিঘ্নিত হয়েছে। আবার পাঠান।" }));
         }
+
         finish();
       } catch (e) {
-        console.error("[chat] pipeline error:", e); // [#9]
+        console.error("[chat] pipeline error:", e);
         push(sse({ error: "উত্তর তৈরি করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।" }));
         finish();
       }
@@ -678,9 +761,6 @@ system += INTEGRITY;
   });
 }
 
-// ---------------------------------------------------------------------
-// একটি মডেলে চেষ্টা: হেডার + প্রথম চাংক নির্দিষ্ট সময়ের মধ্যে না এলে বাতিল [#2]
-// ---------------------------------------------------------------------
 type TryResult =
   | { ok: true; reader: ReadableStreamDefaultReader<Uint8Array>; first: Uint8Array; abort: AbortController }
   | { ok: false; status: number; text: string };
@@ -689,10 +769,18 @@ async function tryAttempt(a: Attempt, base: Record<string, unknown>, kind: TaskK
   const abort = new AbortController();
   const onClient = () => abort.abort();
   clientSignal.addEventListener("abort", onClient, { once: true });
+
   const timer = setTimeout(() => abort.abort(), budgetMs);
   const payload: Record<string, unknown> = { ...base, model: a.model };
-  if (a.google) payload["reasoning_effort"] = kind === "quick" || kind === "general" ? "minimal" : "low";
-  if (a.url === OPENAI_URL && /^gpt-5|^o\d/.test(a.model)) delete payload["temperature"];
+
+  if (a.google) {
+    payload["reasoning_effort"] = kind === "quick" || kind === "general" ? "minimal" : "low";
+  }
+
+  if (a.url === OPENAI_URL && /^gpt-5|^o\d/.test(a.model)) {
+    delete payload["temperature"];
+  }
+
   try {
     const res = await fetch(a.url, {
       method: "POST",
@@ -700,48 +788,57 @@ async function tryAttempt(a: Attempt, base: Record<string, unknown>, kind: TaskK
       body: JSON.stringify(payload),
       signal: abort.signal,
     });
+
     if (!res.ok || !res.body) {
       clearTimeout(timer);
-      return { ok: false, status: res.status || 502, text: (await res.text().catch(() => "")).slice(0, 400) };
+      const text = (await res.text().catch(() => "")).slice(0, 400);
+      return { ok: false, status: res.status || 502, text };
     }
+
     const reader = res.body.getReader();
-    const first = await reader.read(); // প্রথম চাংক = TTFT
+    const first = await reader.read();
     clearTimeout(timer);
-    if (first.done || !first.value) return { ok: false, status: 502, text: "empty stream" };
+
+    if (first.done || !first.value) {
+      return { ok: false, status: 502, text: "empty stream" };
+    }
+
     return { ok: true, reader, first: first.value, abort };
   } catch (e: any) {
     clearTimeout(timer);
     const isTimeout = e?.name === "AbortError";
-    return { ok: false, status: isTimeout ? 504 : 502, text: isTimeout ? `timeout ${budgetMs}ms` : String(e?.message ?? e) };
+    return {
+      ok: false,
+      status: isTimeout ? 504 : 502,
+      text: isTimeout ? `timeout ${budgetMs}ms` : String(e?.message ?? e),
+    };
   } finally {
     clientSignal.removeEventListener("abort", onClient);
   }
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+  return Promise.race([
+    p.catch(() => fallback),
+    new Promise<T>((r) => setTimeout(() => r(fallback), ms)),
+  ]);
 }
 
-// ---------------------------------------------------------------------
-// ত্রুটি বার্তা [#9]
-// ---------------------------------------------------------------------
 function friendlyError(status: number, text: string): string {
   const t = text.toLowerCase();
+
   if (status === 401 || status === 403 || /api key|unauthorized|permission|denied access/.test(t)) {
-    return "সব এআই কী ব্যর্থ হয়েছে: কী-এর অনুমতি নেই বা বাতিল হয়েছে। অ্যাডমিন প্যানেলে গুগল এআই স্টুডিও থেকে নেওয়া নতুন কী বসান।";
+    return "সব এআই কী ব্যর্থ হয়েছে: কী-এর অনুমতি নেই বা বাতিল হয়েছে। অ্যাডমিন প্যানেল থেকে কী যাচাই করুন।";
   }
   if (status === 429 || /rate.?limit|quota|resource_exhausted/.test(t)) {
-    return "সব মডেলের ফ্রি কোটা এই মুহূর্তে শেষ বা সীমিত। এক মিনিট পর আবার চেষ্টা করুন, অথবা অ্যাডমিন প্যানেলে ব্যাকআপ কী যোগ করুন।";
+    return "সব মডেলের ফ্রি কোটা এই মুহূর্তে শেষ বা সীমিত। এক মিনিট পর আবার চেষ্টা করুন।";
   }
-  if (status === 402) return "ব্যাকআপ এআই সার্ভিসের ক্রেডিট শেষ। গুগল কী সচল আছে কিনা যাচাই করুন।";
-  if (status === 504 || /timeout/.test(t)) return "কোনো মডেল সময়মতো সাড়া দেয়নি। আবার পাঠান।";
+  if (status === 402) return "ব্যাকআপ এআই সার্ভিসের ক্রেডিট শেষ। গুগল/অ্যাডমিন কী যাচাই করুন।";
+  if (status === 504 || /timeout/.test(t)) return "কোনো মডেল সময়মতো সাড়া দেয়নি। আবার চেষ্টা করুন।";
   if (status >= 500) return "এআই প্রোভাইডারের সার্ভারে সাময়িক সমস্যা। একটু পরে আবার চেষ্টা করুন।";
   return `উত্তর তৈরি করা যায়নি (কোড: ${status})। অনুগ্রহ করে আবার চেষ্টা করুন।`;
 }
 
-// ---------------------------------------------------------------------
-// ছবি তৈরি
-// ---------------------------------------------------------------------
 function wantsImage(t: string): boolean {
   return (
     /(ছবি|চিত্র|লোগো|পোস্টার|ব্যানার|image|picture|photo|logo|poster|illustration)/i.test(t) &&
@@ -753,22 +850,28 @@ function wantsImage(t: string): boolean {
 async function generateImage(prompt: string): Promise<string | null> {
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) return null;
+
   const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "openai/gpt-image-2.5-sunburst", prompt: prompt.slice(0, 3000), size: "1024x1024", n: 1 }),
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-image-2.5-sunburst",
+      prompt: prompt.slice(0, 3000),
+      size: "1024x1024",
+      n: 1,
+    }),
     signal: AbortSignal.timeout(45000),
   }).catch(() => null);
+
   if (!res?.ok) return null;
   const j: any = await res.json().catch(() => null);
   const d = j?.data?.[0];
   return d?.b64_json ? `data:image/png;base64,${d.b64_json}` : (d?.url ?? null);
 }
 
-// ---------------------------------------------------------------------
-// অনুসন্ধান [#11]–[#20]
-// ---------------------------------------------------------------------
-// [#11] কখন সার্চ: সময়-সংবেদনশীল বা তথ্যভিত্তিক প্রশ্ন; শুভেচ্ছা/আলাপ/অংকে নয়
 type VerificationNeed = {
   search: boolean;
   mustRefuseWithoutEvidence: boolean;
@@ -794,11 +897,45 @@ const SEARCH_CACHE_TTL_MS = 5 * 60_000;
 const SEARCH_RESULT_LIMIT = 8;
 const STRONG_EVIDENCE_MINIMUM = 1;
 
-const STOP = new Set(
-  "আমি আমার আমাকে তুমি আপনি আপনার একটু দয়া করে প্লিজ বলুন বলো বলেন জানাও জানান জানতে চাই চাই সম্পর্কে বিষয়ে কি কী টা টি এর এ ও আর যে সে please tell me about what is the a an of in on for".split(
-    " ",
-  ),
-);
+const STOP = new Set([
+  "আমি",
+  "আমার",
+  "তুমি",
+  "আপনি",
+  "আপনার",
+  "একটু",
+  "দয়া",
+  "করে",
+  "বলুন",
+  "বলো",
+  "বলেন",
+  "জানান",
+  "জানা",
+  "কী",
+  "কি",
+  "এবং",
+  "বা",
+  "এর",
+  "হয়",
+  "এরকম",
+  "please",
+  "plz",
+  "hi",
+  "hello",
+  "thanks",
+  "ধন্যবাদ",
+  "about",
+  "from",
+  "the",
+  "to",
+  "a",
+  "an",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+] as string[]);
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
@@ -814,12 +951,8 @@ const strip = (value: string) =>
 
 function isGreetingOrSmallTalk(text: string): boolean {
   const value = text.trim();
-
-  if (value.length < 3) return true;
-
-  return /^(আসসালামু আলাইকুম|আসসালামু|সালাম|হাই|হ্যালো|hello|hi|ধন্যবাদ|thanks|কেমন আছ|কেমন আছেন|ok|ঠিক আছে|আচ্ছা)[!,.।\s]*$/i.test(
-    value,
-  );
+  if (!value || value.length < 3) return true;
+  return /^(আসসালামু আলাইকুম|আসসালামু|সালাম|হাই|হ্যালো|hello|hi|ধন্যবাদ|thanks|কেমন আছ|কেমন আছেন|কেমন আছেন?)/i.test(value);
 }
 
 function isMathOnly(text: string): boolean {
@@ -827,33 +960,23 @@ function isMathOnly(text: string): boolean {
 }
 
 function hasQuestionIntent(text: string): boolean {
-  return /[?？]|(কে|কী|কি|কোথায়|কোথায়|কবে|কত|কোন|কাদের|কেন|কিভাবে|কীভাবে|বলুন|জানান|তথ্য|পরিচয়|সম্পর্কে|history|who|what|when|where|which|how|tell me|information)/i.test(
-    text,
-  );
+  return /[?？]|(কে|কী|কি|কোথায়|কোথায়|কবে|কত|কোন|কাদের|কেন|কিভাবে|কীভাবে|বলুন|জানান|বলেন|চাই|চাইলে|খুঁজে)/i.test(text);
 }
 
 function hasTimeSensitiveIntent(text: string): boolean {
-  return /(বর্তমান|এখন|আজ|কাল|সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম|বাজার|রেট|আবহাওয়া|আবহাওয়া|ফলাফল|নির্বাচন|জয়ী|পরাজিত|রিলিজ|ভার্সন|update|latest|news|today|current|price|weather|result|election|version)/i.test(
-    text,
-  );
+  return /(বর্তমান|এখন|আজ|কাল|সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম|বাজার|রেট|আবহাওয়া|আবহাওয়া|latest|current|today|news|price|rate)/i.test(text);
 }
 
 function hasIdentityOrOfficeIntent(text: string): boolean {
-  return /(চেয়ারম্যান|চেয়ারম্যান|মেয়র|মেয়র|এমপি|মন্ত্রী|রাষ্ট্রপতি|প্রধানমন্ত্রী|সচিব|কর্মকর্তা|অফিসার|পরিচালক|সভাপতি|প্রধান|ইমাম|খতিব|শিক্ষক|ভিসি|উপাচার্য|ম্যানেজার|প্রতিষ্ঠাতা|owner|chairman|mayor|minister|president|prime minister|director|officer|head|principal|founder|ceo|who is)/i.test(
-    text,
-  );
+  return /(চেয়ারম্যান|চেয়ারম্যান|মেয়র|মেয়র|এমপি|মন্ত্রী|রাষ্ট্রপতি|প্রধানমন্ত্রী|সচিব|ক্যাবিনেট|বিভাগীয় কমিশনার|চেয়ারপারসন|চেয়ারপারসন|director|president|mayor)/i.test(text);
 }
 
 function hasLocalInstitutionIntent(text: string): boolean {
-  return /(ইউনিয়ন|ইউনিয়ন|উপজেলা|জেলা|গ্রাম|পৌরসভা|সিটি কর্পোরেশন|থানা|হাসপাতাল|স্কুল|কলেজ|বিশ্ববিদ্যালয়|বিশ্ববিদ্যালয়|মাদ্রাসা|প্রতিষ্ঠান|অফিস|সরকারি|government|union|upazila|district|hospital|school|college|university|office)/i.test(
-    text,
-  );
+  return /(ইউনিয়ন|ইউনিয়ন|উপজেলা|জেলা|গ্রাম|পৌরসভা|সিটি কর্পোরেশন|থানা|হাসপাতাল|বিদ্যালয়|স্কুল|কলেজ|বিশ্ববিদ্যালয়|ক্লিনিক|কোম্পানি|ব্র্যান্ড)/i.test(text);
 }
 
 function hasHighRiskIntent(text: string): boolean {
-  return /(আইন|ধারা|মামলা|জামিন|আইনজীবী|ওষুধ|ডোজ|চিকিৎসা|রোগ|প্রেসক্রিপশন|শেয়ার|শেয়ার|বিনিয়োগ|বিনিয়োগ|সুদ|ব্যাংক|ফতোয়া|ফতোয়া|মাসআলা|হাদিস|হাদীস|কুরআন|কোরআন|আয়াত|আয়াত|হারাম|হালাল|law|legal|medicine|dose|diagnosis|investment|stock|fatwa|hadith|quran)/i.test(
-    text,
-  );
+  return /(আইন|ধারা|মামলা|জামিন|আইনজীবী|ওষুধ|ডোজ|চিকিৎসা|রোগ|প্রেসক্রিপশন|শেয়ার|স্টক|বিটকয়েন|crypto|investment|loan|ভর্তি|নির্বাচন|ধর্ম|ফতোয়া|fatwa)/i.test(text);
 }
 
 export function assessVerificationNeed(
@@ -881,22 +1004,11 @@ export function assessVerificationNeed(
   const highRisk = hasHighRiskIntent(query);
   const asksForFacts = hasQuestionIntent(query);
 
-  // কোড প্রশ্নেও framework version, current API, বর্তমান প্যাকেজ তথ্যের
-  // জন্য সার্চ চলবে। কিন্তু ব্যবহারকারী নিজে যে code দিয়েছেন সেটি ব্যাখ্যায়
-  // সার্চ বাধ্যতামূলক নয়।
   const technicalFreshness =
     context.isCode &&
-    /(api|sdk|লাইব্রেরি|package|প্যাকেজ|react|typescript|javascript|python|node|version|ভার্সন|release|documentation|ডকুমেন্টেশন)/i.test(
-      query,
-    );
+    /(api|sdk|লাইব্রেরি|package|প্যাকেজ|react|typescript|javascript|python|node|version|ভার্সন|release|documentation|ডকুমেন্টেশন|latest|stable)/i.test(query);
 
-  const search =
-    identity ||
-    localInstitution ||
-    timeSensitive ||
-    highRisk ||
-    technicalFreshness ||
-    asksForFacts;
+  const search = identity || localInstitution || timeSensitive || highRisk || technicalFreshness || asksForFacts;
 
   return {
     search,
@@ -917,7 +1029,6 @@ export function assessVerificationNeed(
   };
 }
 
-// পুরোনো call-site compatible রাখার জন্য।
 export function needsSearch(text: string): boolean {
   return assessVerificationNeed(text, {
     isEngineer: false,
@@ -942,42 +1053,19 @@ export function searchKeywords(text: string): string {
 function sourceTypeOf(url: string): Hit["sourceType"] {
   const host = new URL(url).hostname.toLowerCase();
 
-  if (
-    host.endsWith(".gov.bd") ||
-    host.endsWith(".gov") ||
-    host.endsWith(".edu") ||
-    host === "who.int" ||
-    host.endsWith(".who.int") ||
-    host === "un.org" ||
-    host.endsWith(".un.org")
-  ) {
+  if (host.endsWith(".gov.bd") || host.endsWith(".gov") || host.endsWith(".edu") || host === "who.int" || host.endsWith(".who.int") || host === "un.org" || host.endsWith(".un.org")) {
     return "official";
   }
 
-  if (
-    host === "quran.com" ||
-    host.endsWith(".quran.com") ||
-    host === "sunnah.com" ||
-    host.endsWith(".sunnah.com") ||
-    host === "bjsm.org" ||
-    host.endsWith(".bjsm.org")
-  ) {
+  if (host === "quran.com" || host.endsWith(".quran.com") || host === "sunnah.com" || host.endsWith(".sunnah.com") || host === "bjsm.org" || host.endsWith(".bjsm.org")) {
     return "primary";
   }
 
-  if (
-    /(^|\.)bbc\.com$|(^|\.)reuters\.com$|(^|\.)apnews\.com$|(^|\.)prothomalo\.com$|(^|\.)thedailystar\.net$|(^|\.)bdnews24\.com$|(^|\.)aljazeera\.com$/.test(
-      host,
-    )
-  ) {
+  if (/^(.+\.)?bbc\.com$|^(.+\.)?reuters\.com$|^(.+\.)?apnews\.com$|^(.+\.)?prothomalo\.com$|^(.+\.)?thedailystar\.net$|^(.+\.)?bdnews24\.com$|^(.+\.)?aljazeera\.com$/.test(host)) {
     return "reputable-news";
   }
 
-  if (
-    host.endsWith(".wikipedia.org") ||
-    host === "en.banglapedia.org" ||
-    host.endsWith(".banglapedia.org")
-  ) {
+  if (host.endsWith(".wikipedia.org") || host === "en.banglapedia.org" || host.endsWith(".banglapedia.org")) {
     return "reference";
   }
 
@@ -1135,7 +1223,6 @@ async function newsSearch(query: string): Promise<Hit[]> {
           .trim();
 
       const url = normalizeUrl(tag("link"));
-
       if (!url) return null;
 
       return {
@@ -1151,7 +1238,6 @@ async function newsSearch(query: string): Promise<Hit[]> {
 
 async function tavilySearch(query: string): Promise<Hit[]> {
   const key = process.env["TAVILY_API_KEY"]?.trim();
-
   if (!key) return [];
 
   const response = await fetch("https://api.tavily.com/search", {
@@ -1177,16 +1263,12 @@ async function tavilySearch(query: string): Promise<Hit[]> {
   return (data?.results ?? [])
     .map((item: any): Hit | null => {
       const url = normalizeUrl(String(item?.url ?? ""));
-
       if (!url) return null;
 
       return {
         title: String(item?.title ?? "").trim(),
         url,
-        snippet: String(item?.content ?? "")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 900),
+        snippet: String(item?.content ?? "").replace(/\s+/g, " ").trim().slice(0, 900),
         trust: trustOf(url) + 1,
         sourceType: sourceTypeOf(url),
       };
@@ -1196,24 +1278,19 @@ async function tavilySearch(query: string): Promise<Hit[]> {
 
 function deduplicateHits(hits: Hit[]): Hit[] {
   const seen = new Set<string>();
-
   return hits.filter((hit) => {
     const normalized = normalizeUrl(hit.url);
-
     if (!normalized || seen.has(normalized)) return false;
 
     seen.add(normalized);
     hit.url = normalized;
-
     return Boolean(hit.title && hit.snippet);
   });
 }
 
 async function webSearch(rawQuery: string): Promise<SearchResult> {
   const query = searchKeywords(rawQuery) || rawQuery.slice(0, 180);
-  const isNewsQuery = /(খবর|সংবাদ|আজ|বর্তমান|সর্বশেষ|সাম্প্রতিক|news|today|current|latest)/i.test(
-    rawQuery,
-  );
+  const isNewsQuery = /(খবর|সংবাদ|আজ|বর্তমান|সর্বশেষ|সাম্প্রতিক|news|today|current|latest)/i.test(rawQuery);
 
   const tasks: Promise<Hit[]>[] = [
     ddgSearch(query),
@@ -1222,9 +1299,7 @@ async function webSearch(rawQuery: string): Promise<SearchResult> {
     wikiSearch("en", query),
   ];
 
-  if (isNewsQuery) {
-    tasks.push(newsSearch(query));
-  }
+  if (isNewsQuery) tasks.push(newsSearch(query));
 
   const settled = await Promise.allSettled(tasks);
 
@@ -1265,56 +1340,47 @@ async function webSearch(rawQuery: string): Promise<SearchResult> {
   };
 }
 
-// ---------------------------------------------------------------------
-// [#13] নিরাপদ ওয়েব পেজ রিডার (প্রাইভেট নেটওয়ার্ক ব্লক)
-// ---------------------------------------------------------------------
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase().trim().replace(/^\[|\]$/g, "");
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h === "metadata.google.internal") return true;
-  if (h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc00:") || h.startsWith("fd") || h.startsWith("::ffff:")) return true;
-  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
-  }
-  return false;
-}
-
 async function safeFetch(url: string, maxRedirects = 3): Promise<Response> {
   let cur = url;
+
   for (let i = 0; i <= maxRedirects; i++) {
     const u = new URL(cur);
+
     if (!["http:", "https:"].includes(u.protocol)) throw new Error("Blocked protocol");
     if (isBlockedHost(u.hostname)) throw new Error("Blocked host");
     if (u.port && !["80", "443"].includes(u.port)) throw new Error("Blocked port");
+
     const res = await fetch(cur, {
       redirect: "manual",
-      headers: { "User-Agent": BROWSER_UA + " (AlAhsanAI Reader)", Accept: "text/html,text/plain;q=0.9,*/*;q=0.8" },
+      headers: {
+        "User-Agent": BROWSER_UA + " (AlAhsanAI Reader)",
+        Accept: "text/html,text/plain;q=0.9,*/*;q=0.8",
+      },
       signal: AbortSignal.timeout(4000),
     });
+
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get("location");
       if (!loc) break;
       cur = new URL(loc, cur).href;
       continue;
     }
+
     return res;
   }
+
   throw new Error("Too many redirects");
 }
 
 async function readUrls(text: string): Promise<string> {
   const urls = (text.match(/https?:\/\/[^\s<>"')]+/g) || []).slice(0, 2);
+
   const pages = await Promise.all(
     urls.map(async (u) => {
       try {
         const res = await safeFetch(u);
         if (!res.ok) return "";
+
         const html = await res.text();
         const clean = html
           .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -1323,11 +1389,13 @@ async function readUrls(text: string): Promise<string> {
           .replace(/\s+/g, " ")
           .trim()
           .slice(0, 4000);
+
         return clean ? `[${u}]\n${clean}` : "";
       } catch {
         return "";
       }
     }),
   );
+
   return pages.filter(Boolean).join("\n\n");
 }
