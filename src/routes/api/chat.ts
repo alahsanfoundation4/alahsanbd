@@ -442,8 +442,21 @@ async function handleChat(request: Request): Promise<Response> {
 
   const lastImgs = imgsOf(msgsIn.length - 1);
   const wantImg = !lastImgs.length && wantsImage(lastMsgText) && !!gatewayKey;
-  const shouldSearch = !isEngineer && !isSiteReq && !isCode && !hasImage && needsSearch(lastMsgText);
-  const cacheKey = kind === "quick" && !hasImage && !shouldSearch && msgsIn.length === 1 ? `${uid}|${lastMsgText.trim().toLowerCase()}` : "";
+  const verification = assessVerificationNeed(lastMsgText, {
+  isEngineer,
+  isSiteReq,
+  isCode,
+  hasImage,
+});
+
+const shouldSearch = verification.search;
+const cacheKey =
+  kind === "quick" &&
+  !hasImage &&
+  !shouldSearch &&
+  msgsIn.length === 1
+    ? `${uid}|${lastMsgText.trim().toLowerCase()}`
+    : "";
 
   // ---- লাইভ স্ট্রিম [#5][#6][#47] ----
   const enc = new TextEncoder();
@@ -531,15 +544,34 @@ async function handleChat(request: Request): Promise<Response> {
           textMsgs[textMsgs.length - 1] = { role: last.role, content: `${last.content}\n\n=== সংযুক্ত ওয়েব পেজের লেখা ===\n${web}` };
         }
         if (shouldSearch) {
-          stage("verify");
-          system += GROUNDING_RULES;
-          system += found.count
-            ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===\n${found.text}`
-            : `\n\n=== অনুসন্ধানের উৎস ===\nলাইভ অনুসন্ধানে কোনো ফলাফল পাওয়া যায়নি। নিশ্চিত জ্ঞান না থাকলে [#17] নিয়ম অনুযায়ী স্পষ্ট বলবে যে তথ্য পাওয়া যায়নি।`;
-        } else if (web) {
-          system += GROUNDING_RULES;
-        }
-        system += INTEGRITY;
+  stage("verify");
+
+  // নাম, পদ, বর্তমান তথ্য, আইন, চিকিৎসা, ধর্মীয় সূত্র ইত্যাদিতে
+  // যথেষ্ট প্রমাণ না থাকলে মডেলকে অনুমানের সুযোগ দেওয়া হবে না।
+  if (verification.mustRefuseWithoutEvidence && !found.hasStrongEvidence) {
+    stage("write");
+    say(
+      "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি। " +
+        "নির্ভরযোগ্য সরকারি, প্রাতিষ্ঠানিক বা প্রাথমিক উৎস ছাড়া আমি নাম, পদ বা বর্তমান তথ্য অনুমান করে বলব না। " +
+        "প্রশ্নটি আরও নির্দিষ্ট করে দিন অথবা সংশ্লিষ্ট প্রতিষ্ঠানের অফিসিয়াল লিংক দিন।",
+    );
+    push(enc.encode("data: [DONE]\n\n"));
+    return finish();
+  }
+
+  system += GROUNDING_RULES + EVIDENCE_PROTOCOL;
+  system += found.count
+    ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===
+নিচের উৎসের বাইরে কোনো সুনির্দিষ্ট দাবি করা যাবে না। কোনো দাবির সঙ্গে উৎসের প্রমাণ না মিললে সেই দাবি বাদ দিতে হবে।
+
+${found.text}`
+    : `\n\n=== অনুসন্ধানের উৎস ===
+লাইভ অনুসন্ধানে নির্ভরযোগ্য ফল পাওয়া যায়নি। অনুমান করা নিষিদ্ধ। নিশ্চিত তথ্য না থাকলে স্পষ্টভাবে বলবে: "যাচাইকৃত সূত্রে এই তথ্য নিশ্চিত করা যায়নি।"`;
+} else if (web) {
+  system += GROUNDING_RULES + EVIDENCE_PROTOCOL;
+}
+
+system += INTEGRITY;
 
         if (isCode || isSiteReq || isEngineer) stage("code");
 
