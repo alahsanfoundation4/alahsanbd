@@ -156,15 +156,15 @@ const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 export const GOOGLE_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
-  general: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  quick: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  general: ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
   code: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
   engineer: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
 };
 
 const GATEWAY_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
-  general: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  quick: ["google/gemini-3.1-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  general: ["google/gemini-3.5-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
   code: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
   engineer: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
 };
