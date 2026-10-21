@@ -412,7 +412,7 @@ async function handleChat(request: Request): Promise<Response> {
     }
   }
 
-  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).catch(() => {});
+  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {}, () => {});
 
   type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
 
