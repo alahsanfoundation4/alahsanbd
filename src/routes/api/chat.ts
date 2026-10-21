@@ -98,6 +98,16 @@ const EVIDENCE_PROTOCOL = `
 10. উৎস ব্যবহার করলে শেষে "### সূত্র" শিরোনামে সেগুলো তালিকাভুক্ত করবে।
 `;
 
+const VERIFY_BEFORE_ANSWER = `
+## উত্তর দেওয়ার আগে বাধ্যতামূলক যাচাই
+1. উত্তর লেখার আগে মনে মনে প্রতিটি তথ্যভিত্তিক দাবি অনুসন্ধানের উৎসের সাথে মিলিয়ে নেবে।
+2. দুটি উৎসে অমিল থাকলে অমিলটি স্পষ্ট বলবে; একটিকে জোর করে সত্য বলবে না।
+3. শুধু "সাধারণ ওয়েব উৎস" থাকলে নিশ্চিত ভঙ্গিতে নয়, সীমাবদ্ধতা উল্লেখ করে বলবে।
+4. উৎসে নেই এমন নাম, সংখ্যা, তারিখ, পদ, দাম বা লিংক কখনো যোগ করবে না।
+5. নিশ্চিত না হলে স্পষ্ট বলবে "নিশ্চিত নই" এবং কী যাচাই করা দরকার তা জানাবে।
+6. ব্যবহারকারীর প্রশ্নের ভুল ধারণা সংশোধন করবে, সমর্থন করবে না।
+`;
+
 const SITE_BUILDER_PROMPT = `## ওয়েবসাইট ও ওয়েব অ্যাপ নির্মাতা (Production Grade)
 ব্যবহারকারী যেকোনো ওয়েবসাইট, landing page, ecommerce, portal, SaaS UI বা dashboard চাইলে:
 ১. সম্পূর্ণ, self-contained, production-grade HTML/CSS/JS কোড দেবে।
@@ -181,7 +191,7 @@ export function tokenBudget(kind: TaskKind, site: boolean): number {
 
 export function firstTokenBudget(kind: TaskKind, pass: 1 | 2): number {
   if (pass === 2) return 25000;
-  return kind === "quick" || kind === "general" ? 3500 : 9000;
+  return kind === "quick" || kind === "general" ? 3500 : 5000;
 }
 
 const cooldown = new Map<string, number>();
@@ -632,12 +642,12 @@ async function handleChat(request: Request): Promise<Response> {
             return finish();
           }
 
-          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}\n\n${VERIFY_BEFORE_ANSWER}`;
           system += found.count
             ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===\nনিচের উৎসের বাইরে কোনো সুনির্দিষ্ট দাবি করা যাবে না।\n\n${found.text}`
             : `\n\n=== অনুসন্ধানের উৎস ===\nলাইভ অনুসন্ধানে নির্ভরযোগ্য ফল পাওয়া যায়নি। অনুমান করা নিষিদ্ধ। নিশ্চিত তথ্যের জন্য প্রামাণ্য ও প্রাথমিক উৎস দরকার।`;
         } else if (web) {
-          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}\n\n${VERIFY_BEFORE_ANSWER}`;
         }
 
         system += `\n\n${INTEGRITY}`;
@@ -655,7 +665,7 @@ async function handleChat(request: Request): Promise<Response> {
 
         const basePayload = {
           stream: true,
-          temperature: isSiteReq ? 0.4 : 0.2,
+          temperature: isSiteReq ? 0.4 : shouldSearch ? 0.1 : 0.2,
           max_tokens: tokenBudget(kind, isSiteReq),
           messages: [{ role: "system", content: system }, ...msgs],
         };
@@ -1005,7 +1015,11 @@ export function assessVerificationNeed(
     context.isCode &&
     /(api|sdk|লাইব্রেরি|package|প্যাকেজ|react|typescript|javascript|python|node|version|ভার্সন|release|documentation|ডকুমেন্টেশন|latest|stable)/i.test(query);
 
-  const search = identity || localInstitution || timeSensitive || highRisk || technicalFreshness || asksForFacts;
+  const creativeOrBuild = context.isSiteReq || context.isEngineer || (context.isCode && !technicalFreshness);
+  const substantive = !creativeOrBuild && query.length >= 8;
+
+  const search =
+    identity || localInstitution || timeSensitive || highRisk || technicalFreshness || asksForFacts || substantive;
 
   return {
     search,
