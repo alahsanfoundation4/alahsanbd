@@ -146,17 +146,17 @@ const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 export const GOOGLE_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3-flash-preview"],
-  general: ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"],
-  code: ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"],
-  engineer: ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3-flash-preview"],
+  quick: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  general: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  code: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  engineer: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
 };
 
 const GATEWAY_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["google/gemini-3.1-flash-lite", "google/gemini-3-flash-preview"],
-  general: ["google/gemini-3-flash-preview", "google/gemini-3.1-flash-lite"],
-  code: ["google/gemini-3.8-flash", "google/gemini-3-flash-preview"],
-  engineer: [],
+  quick: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  general: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  code: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  engineer: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
 };
 
 export function classifyTask(
@@ -441,9 +441,6 @@ async function handleChat(request: Request): Promise<Response> {
   };
 
   const googleChain = [...GOOGLE_CHAINS[kind]];
-  if (!isEngineer && adminProvider === "google" && adminModel.startsWith("gemini-3")) {
-    googleChain.unshift(adminModel);
-  }
 
   const rotatedGoogle = rotate(googleKeys, rrCounter++);
 
@@ -459,7 +456,7 @@ async function handleChat(request: Request): Promise<Response> {
       add({
         url: GATEWAY_URL,
         key: gatewayKey,
-        model: userModel || adminModel || GATEWAY_CHAINS[kind][0]!,
+        model: GATEWAY_CHAINS[kind][0]!,
         label: "gateway:preferred",
         google: false,
       });
@@ -613,7 +610,7 @@ async function handleChat(request: Request): Promise<Response> {
 
         const [web, found] = await Promise.all([
           wantsUrl ? readUrls(lastMsgText).catch(() => "") : Promise.resolve(""),
-          shouldSearch ? withTimeout(cachedSearch(lastMsgText), 4500, { text: "", count: 0, strongCount: 0, hasStrongEvidence: false }) : Promise.resolve({ text: "", count: 0, strongCount: 0, hasStrongEvidence: false }),
+          shouldSearch ? withTimeout(cachedSearch(lastMsgText), 3000, { text: "", count: 0, strongCount: 0, hasStrongEvidence: false }) : Promise.resolve({ text: "", count: 0, strongCount: 0, hasStrongEvidence: false }),
         ]);
 
         if (web) {
@@ -1253,7 +1250,7 @@ async function tavilySearch(query: string): Promise<Hit[]> {
       include_answer: false,
       include_raw_content: false,
     }),
-    signal: AbortSignal.timeout(4_500),
+    signal: AbortSignal.timeout(3_000),
   });
 
   if (!response.ok) return [];
