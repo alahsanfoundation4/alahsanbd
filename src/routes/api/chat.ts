@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { LOVABLE_MODELS } from "@/lib/models";
+import { LOVABLE_MODELS, ALL_AVAILABLE_MODELS } from "@/lib/models";
 import { GPT_ENGINEER_PROMPT, needsCodeEngine } from "@/lib/gpt-engineer";
 
 const Body = z.object({
@@ -439,9 +439,9 @@ async function handleChat(request: Request): Promise<Response> {
 
   const openaiKey = cleanKey(keys?.openai_key) || cleanKey(process.env["OPENAI_API_KEY"]);
   const gatewayKey = cleanKey(process.env["LOVABLE_API_KEY"]);
-  const userModel = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : "";
   const adminProvider = String(s?.provider ?? "google");
   const adminModel = String(s?.model ?? "").trim();
+  const adminReasoningEffort = String(s?.reasoning_effort ?? "low").trim();
 
   const attempts: Attempt[] = [];
   const add = (a: Attempt) => {
@@ -451,63 +451,85 @@ async function handleChat(request: Request): Promise<Response> {
   };
 
   const googleChain = [...GOOGLE_CHAINS[kind]];
-
   const rotatedGoogle = rotate(googleKeys, rrCounter++);
 
-  if (isEngineer) {
-    for (const model of googleChain) {
+  // ১. ব্যবহারকারী যদি চ্যাট ইন্টারফেসে নির্দিষ্ট মডেল বাছাই করে থাকেন, তবে সেটিই প্রথম অগ্রাধিকার
+  const selectedModelMeta = parsed.data.model
+    ? ALL_AVAILABLE_MODELS.find((m) => m.id === parsed.data.model)
+    : undefined;
+
+  if (selectedModelMeta) {
+    if (selectedModelMeta.provider === "lovable" && gatewayKey) {
+      add({ url: GATEWAY_URL, key: gatewayKey, model: selectedModelMeta.id, label: "gateway:user", google: false });
+    } else if (selectedModelMeta.provider === "google" && rotatedGoogle.length > 0) {
       for (const key of rotatedGoogle) {
-        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+        add({ url: GOOGLE_URL, key, model: selectedModelMeta.id, label: "google:user", google: true });
+      }
+    } else if (selectedModelMeta.provider === "openai" && openaiKey) {
+      add({ url: OPENAI_URL, key: openaiKey, model: selectedModelMeta.id, label: "openai:user", google: false });
+    }
+  }
+
+  // ২. অ্যাডমিন প্যানেলে নির্ধারিত প্রোভাইডার ও মডেলের সর্বোচ্চ অগ্রাধিকার (সাধারণ ও ইঞ্জিনিয়ার উভয় মোডেই)
+  if (adminProvider === "google" && rotatedGoogle.length > 0) {
+    if (adminModel) {
+      for (const key of rotatedGoogle) {
+        add({ url: GOOGLE_URL, key, model: adminModel, label: "google:admin", google: true });
       }
     }
-  } else {
-    const preferGateway = Boolean(gatewayKey) && (Boolean(userModel) || adminProvider === "lovable");
-    if (preferGateway) {
+  } else if (adminProvider === "lovable" && gatewayKey) {
+    add({
+      url: GATEWAY_URL,
+      key: gatewayKey,
+      model: adminModel || GATEWAY_CHAINS[kind][0]!,
+      label: "gateway:admin",
+      google: false,
+    });
+  } else if (adminProvider === "openai" && openaiKey) {
+    add({
+      url: OPENAI_URL,
+      key: openaiKey,
+      model: adminModel || "gpt-5.5",
+      label: "openai:admin",
+      google: false,
+    });
+  }
+
+  // ৩. গুগল রিজনিং চেইন (যেসব মডেল দ্রুত ও কার্যকর)
+  for (const model of googleChain) {
+    for (const key of rotatedGoogle) {
+      add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+    }
+  }
+
+  // ৪. ব্যাকআপ কী পুল
+  for (const p of pool) {
+    const key = cleanKey(p.key);
+    if (!key) continue;
+
+    const customUrl = normalizeCustomEndpoint(p.base_url);
+    if (p.provider === "custom" && customUrl) {
       add({
-        url: GATEWAY_URL,
-        key: gatewayKey,
-        model: GATEWAY_CHAINS[kind][0]!,
-        label: "gateway:preferred",
+        url: customUrl,
+        key,
+        model: p.model?.trim() || "llama-3.3-70b-versatile",
+        label: `custom:${p.name ?? ""}`,
         google: false,
       });
+    } else if (p.provider === "openai") {
+      add({ url: OPENAI_URL, key, model: p.model?.trim() || "gpt-4o", label: `openai-pool:${p.name ?? ""}`, google: false });
     }
+  }
 
-    if (adminProvider === "openai" && openaiKey) {
-      add({ url: OPENAI_URL, key: openaiKey, model: adminModel || "gpt-4o", label: "openai:admin", google: false });
-    }
+  // ৫. ওপেনএআই ব্যাকআপ
+  if (openaiKey) {
+    add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
+  }
 
-    for (const model of googleChain) {
-      for (const key of rotatedGoogle) {
-        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
-      }
-    }
-
-    for (const p of pool) {
-      const key = cleanKey(p.key);
-      if (!key) continue;
-
-      const customUrl = normalizeCustomEndpoint(p.base_url);
-      if (p.provider === "custom" && customUrl) {
-        add({
-          url: customUrl,
-          key,
-          model: p.model?.trim() || "llama-3.3-70b-versatile",
-          label: `custom:${p.name ?? ""}`,
-          google: false,
-        });
-      } else if (p.provider === "openai") {
-        add({ url: OPENAI_URL, key, model: p.model?.trim() || "gpt-4o", label: `openai-pool:${p.name ?? ""}`, google: false });
-      }
-    }
-
-    if (openaiKey) {
-      add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
-    }
-
-    if (gatewayKey) {
-      for (const model of GATEWAY_CHAINS[kind]) {
-        add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
-      }
+  // ৬. গেটওয়ে চেইন ব্যাকআপ
+  if (gatewayKey) {
+    for (const model of GATEWAY_CHAINS[kind]) {
+      add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
     }
   }
 
@@ -681,7 +703,7 @@ async function handleChat(request: Request): Promise<Response> {
             if ((deadKeys.get(keyId(a.key)) ?? 0) > Date.now()) continue;
             if (pass === 1 && isCooling(a) && attempts.some((x) => !isCooling(x))) continue;
 
-            const r = await tryAttempt(a, basePayload, kind, firstTokenBudget(kind, pass), clientGone.signal);
+            const r = await tryAttempt(a, basePayload, kind, firstTokenBudget(kind, pass), clientGone.signal, adminReasoningEffort);
             if (r.ok) {
               opened = { reader: r.reader, first: r.first, label: a.label, abort: r.abort };
               break;
@@ -772,7 +794,14 @@ type TryResult =
   | { ok: true; reader: ReadableStreamDefaultReader<Uint8Array>; first: Uint8Array; abort: AbortController }
   | { ok: false; status: number; text: string };
 
-async function tryAttempt(a: Attempt, base: Record<string, unknown>, kind: TaskKind, budgetMs: number, clientSignal: AbortSignal): Promise<TryResult> {
+async function tryAttempt(
+  a: Attempt,
+  base: Record<string, unknown>,
+  kind: TaskKind,
+  budgetMs: number,
+  clientSignal: AbortSignal,
+  reasoningEffort?: string
+): Promise<TryResult> {
   const abort = new AbortController();
   const onClient = () => abort.abort();
   clientSignal.addEventListener("abort", onClient, { once: true });
@@ -780,8 +809,15 @@ async function tryAttempt(a: Attempt, base: Record<string, unknown>, kind: TaskK
   const timer = setTimeout(() => abort.abort(), budgetMs);
   const payload: Record<string, unknown> = { ...base, model: a.model };
 
+  const effort = reasoningEffort || (kind === "quick" || kind === "general" ? "minimal" : "low");
+  const normalizedEffort = effort === "xhigh" ? "high" : effort;
+
   if (a.google) {
-    payload["reasoning_effort"] = kind === "quick" || kind === "general" ? "minimal" : "low";
+    payload["reasoning_effort"] = normalizedEffort;
+  } else if (a.url === GATEWAY_URL || a.url === OPENAI_URL) {
+    if (normalizedEffort && normalizedEffort !== "none") {
+      payload["reasoning_effort"] = normalizedEffort;
+    }
   }
 
   if (a.url === OPENAI_URL && /^gpt-5|^o\d/.test(a.model)) {

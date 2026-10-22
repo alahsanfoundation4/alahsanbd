@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, ALL_AVAILABLE_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -36,12 +36,34 @@ function AdminPage() {
   const [show, setShow] = useState(false);
   const [pool, setPool] = useState<PoolKey[]>([]);
   const [status, setStatus] = useState("");
+  const [cleanNote, setCleanNote] = useState("");
+  const [chatModes, setChatModes] = useState<{ study: boolean; write: boolean; code: boolean; engineer: boolean }>({
+    study: true,
+    write: true,
+    code: true,
+    engineer: true,
+  });
+  const [allowedModels, setAllowedModels] = useState<string[]>(ALL_AVAILABLE_MODELS.map((m) => m.id));
 
   useEffect(() => {
     if (!admin) return;
     supabase.from("ai_settings").select("*").eq("id", 1).maybeSingle().then(({ data, error }) => {
-      if (data) return setS(data as unknown as S);
+      if (data) {
+        let note = data.admin_note || "";
+        const m = note.match(/<!--CONFIG:(.*?)-->/);
+        if (m) {
+          try {
+            const cfg = JSON.parse(m[1]);
+            if (cfg.modes) setChatModes((prev) => ({ ...prev, ...cfg.modes }));
+            if (Array.isArray(cfg.allowed_models) && cfg.allowed_models.length > 0) setAllowedModels(cfg.allowed_models);
+          } catch {}
+          note = note.replace(/<!--CONFIG:.*?-->/g, "").trim();
+        }
+        setCleanNote(note);
+        return setS(data as unknown as S);
+      }
       setStatus(error ? `সেটিংস আনা যায়নি: ${error.message}` : "");
+      setCleanNote("");
       setS({ admin_note: "", system_prompt: "", provider: "lovable", model: "", hourly_limit: 30, daily_limit: 200, reasoning_effort: "low", welcome_title: "", welcome_subtitle: "", suggestions: "", url_reader: true, site_builder: true, chat_enabled: true });
     });
     supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
@@ -71,8 +93,10 @@ function AdminPage() {
 
   const save = async () => {
     setStatus("সংরক্ষণ হচ্ছে…");
+    const finalNote = `${cleanNote.trim()}\n<!--CONFIG:${JSON.stringify({ modes: chatModes, allowed_models: allowedModels })}-->`;
     const r1 = await supabase.from("ai_settings").upsert({
       ...s,
+      admin_note: finalNote,
       id: 1,
       hourly_limit: Math.max(1, s.hourly_limit || 1),
       daily_limit: Math.max(1, s.daily_limit || 1),
@@ -118,7 +142,7 @@ function AdminPage() {
         <section className={card}>
           <h2 className={h2}>১. এআই-কে নির্দেশনা (সর্বোচ্চ অগ্রাধিকার)</h2>
           <p className={hint}>এখানে যা লিখবেন, এআই সবার আগে সেটাই মানবে। যেমন: "সব উত্তর সংক্ষেপে দেবে", "নতুন তথ্য: আমাদের ফোন নম্বর …"।</p>
-          <textarea value={s.admin_note} onChange={(e) => set("admin_note", e.target.value)} rows={8} className={`${input} mt-3`} />
+          <textarea value={cleanNote} onChange={(e) => setCleanNote(e.target.value)} rows={8} className={`${input} mt-3`} />
         </section>
 
         <section className={card}>
@@ -196,6 +220,77 @@ function AdminPage() {
           <input value={s.welcome_subtitle} onChange={(e) => set("welcome_subtitle", e.target.value)} className={`${input} mt-1`} />
           <label className="mt-3 block text-sm text-muted-foreground">প্রস্তাবিত প্রশ্ন (প্রতি লাইনে একটি)</label>
           <textarea value={s.suggestions} onChange={(e) => set("suggestions", e.target.value)} rows={5} className={`${input} mt-1`} />
+        </section>
+
+        <section className={card}>
+          <h2 className={h2}>৮. চ্যাট মোড নিয়ন্ত্রণ (অন / অফ)</h2>
+          <p className={hint}>যেসব মোড চালু রাখবেন, সাধারণ ব্যবহারকারী চ্যাটে শুধু সেগুলোই বেছে নিতে পারবেন।</p>
+          <div className="mt-4 space-y-2">
+            {[
+              { id: "study" as const, label: "পড়াশোনা মোড (সহজ ব্যাখ্যা ও অনুশীলন)" },
+              { id: "write" as const, label: "লেখালেখি মোড (প্রবন্ধ ও সাহিত্য)" },
+              { id: "code" as const, label: "কোডিং মোড (সফটওয়্যার ও স্ক্রিপ্ট)" },
+              { id: "engineer" as const, label: "ইঞ্জিনিয়ার মোড (গভীর যুক্তি ও আর্কিটেকচার)" },
+            ].map((m) => (
+              <label key={m.id} className="flex items-center justify-between gap-4 rounded-lg border border-border px-4 py-3 text-sm">
+                <span>{m.label}</span>
+                <input
+                  type="checkbox"
+                  checked={chatModes[m.id] !== false}
+                  onChange={(e) => setChatModes({ ...chatModes, [m.id]: e.target.checked })}
+                  className="h-5 w-5 accent-[hsl(var(--primary))]"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className={card}>
+          <div className="flex items-center justify-between">
+            <h2 className={h2}>৯. ব্যবহারকারীর জন্য অনুমোদিত এআই মডেল</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAllowedModels(ALL_AVAILABLE_MODELS.map((m) => m.id))}
+                className="text-xs text-primary underline"
+              >
+                সব নির্বাচন
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllowedModels([])}
+                className="text-xs text-muted-foreground underline"
+              >
+                সব বাতিল
+              </button>
+            </div>
+          </div>
+          <p className={hint}>ব্যবহারকারী চ্যাটে কোন কোন মডেল বাছাই করতে পারবেন তা এখান থেকে ঠিক করুন।</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {ALL_AVAILABLE_MODELS.map((m) => {
+              const checked = allowedModels.includes(m.id);
+              return (
+                <label key={m.id} className={`flex items-start gap-3 rounded-lg border p-3 text-xs ${checked ? "border-primary/50 bg-primary/5" : "border-border"}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setAllowedModels([...allowedModels, m.id]);
+                      } else {
+                        setAllowedModels(allowedModels.filter((id) => id !== m.id));
+                      }
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+                  />
+                  <div>
+                    <span className="font-medium text-foreground">{m.label}</span>
+                    <span className="block text-muted-foreground text-[10px]">{m.id}</span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
         </section>
         <KeyPool pool={pool} setPool={setPool} show={show} />
         <DriveMemory />
