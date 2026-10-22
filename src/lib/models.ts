@@ -29,3 +29,8 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
   openai: "gpt-5.5",
 };
 
+export const ALL_AVAILABLE_MODELS = [
+  ...LOVABLE_MODELS.map((m) => ({ ...m, provider: "lovable" as Provider })),
+  ...GOOGLE_MODELS.map((m) => ({ ...m, provider: "google" as Provider })),
+  ...OPENAI_MODELS.map((m) => ({ ...m, provider: "openai" as Provider })),
+];
