@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, ALL_AVAILABLE_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, GROQ_MODELS, OPENROUTER_MODELS, ALL_AVAILABLE_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -88,7 +88,7 @@ function AdminPage() {
   if (!s) return <div className="min-h-screen bg-background p-8 text-muted-foreground">লোড হচ্ছে…</div>;
 
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
-  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "openai" ? OPENAI_MODELS : LOVABLE_MODELS);
+  const listFor = (p: Provider) => p === "google" ? GOOGLE_MODELS : p === "openai" ? OPENAI_MODELS : p === "groq" ? GROQ_MODELS : p === "openrouter" ? OPENROUTER_MODELS : LOVABLE_MODELS;
   const models = listFor(s.provider);
 
   const save = async () => {
@@ -154,8 +154,8 @@ function AdminPage() {
 
         <section className={card}>
           <h2 className={h2}>৩. এআই মোড, মডেল ও চিন্তার গভীরতা</h2>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {([["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["openai", "OpenAI"]] as const).map(([p, l]) => (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {([ ["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["openai", "OpenAI"], ["groq", "Groq"], ["openrouter", "OpenRouter"]] as const).map(([p, l]) => (
               <button key={p} onClick={() => setS({ ...s, provider: p, model: listFor(p)[0]?.id ?? "" })}
                 className={`rounded-lg border px-3 py-3 text-sm ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border"}`}>{l}</button>
             ))}
@@ -432,6 +432,20 @@ type PoolKey = { name: string; provider: PoolProvider; key: string; base_url?: s
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
   const [testing, setTesting] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<Record<number, string>>({});
+  const [liveModels, setLiveModels] = useState<Record<number, Array<{ id: string; label: string }>>>({});
+  const [loadingModels, setLoadingModels] = useState<number | null>(null);
+  const refreshModels = async (index: number) => {
+    setLoadingModels(index);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch("/api/integrations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify({ index, action: "models" }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(result.models)) throw new Error(result.error ?? "মডেল তালিকা পাওয়া যায়নি");
+      setLiveModels((prev) => ({ ...prev, [index]: result.models }));
+      setTestResults((prev) => ({ ...prev, [index]: `সফল: ${result.models.length}টি বর্তমান মডেল পাওয়া গেছে` }));
+    } catch (error) { setTestResults((prev) => ({ ...prev, [index]: `ব্যর্থ: ${error instanceof Error ? error.message : "মডেল তালিকা পাওয়া যায়নি"}` })); }
+    finally { setLoadingModels(null); }
+  };
   const testIntegration = async (index: number) => {
     setTesting(index);
     setTestResults((prev) => ({ ...prev, [index]: "পরীক্ষা চলছে…" }));
@@ -470,7 +484,12 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
             {(p.provider === "custom" || p.provider === "groq" || p.provider === "openrouter") && (
               <div className="flex gap-2">
                 {p.provider === "custom" && <input value={p.base_url ?? ""} onChange={(e) => upd(i, { base_url: e.target.value })} placeholder="Base URL (HTTPS)" className={input} />}
-                <input value={p.model ?? ""} onChange={(e) => upd(i, { model: e.target.value })} placeholder={p.provider === "openrouter" ? "openrouter/free (default)" : p.provider === "groq" ? "llama-3.3-70b-versatile (default)" : "মডেলের নাম"} className={input} />
+                {p.provider === "groq" || p.provider === "openrouter" ? (
+                  <select value={p.model ?? (p.provider === "groq" ? "llama-3.3-70b-versatile" : "openrouter/free")} onChange={(e) => upd(i, { model: e.target.value })} className={input}>
+                    {(liveModels[i] ?? (p.provider === "groq" ? GROQ_MODELS : OPENROUTER_MODELS)).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                ) : <input value={p.model ?? ""} onChange={(e) => upd(i, { model: e.target.value })} placeholder="মডেলের নাম" className={input} />}
+                {(p.provider === "groq" || p.provider === "openrouter") && <button type="button" onClick={() => refreshModels(i)} disabled={loadingModels === i} className="shrink-0 rounded-lg border border-primary px-3 text-xs text-primary disabled:opacity-50">{loadingModels === i ? "আনা হচ্ছে…" : "লাইভ মডেল"}</button>}
               </div>
             )}
             {p.provider === "weather" && <input value={p.model ?? "Dhaka"} onChange={(e) => upd(i, { model: e.target.value })} placeholder="পরীক্ষার শহর (যেমন Dhaka)" className={input} />}
@@ -481,11 +500,11 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
                 <input type="checkbox" checked={p.active} onChange={(e) => upd(i, { active: e.target.checked })} /> চালু
               </label>
               <div className="flex items-center gap-3">
-                {(p.provider === "weather" || p.provider === "jsonplaceholder") && <button onClick={() => testIntegration(i)} disabled={testing === i} className="text-primary disabled:opacity-50">API পরীক্ষা</button>}
+                <button onClick={() => testIntegration(i)} disabled={testing === i} className="text-primary disabled:opacity-50">{testing === i ? "পরীক্ষা চলছে…" : "সিগন্যাল পরীক্ষা"}</button>
                 <button onClick={() => setPool(pool.filter((_, j) => j !== i))} className="text-destructive">মুছুন</button>
               </div>
             </div>
-            {testResults[i] && <p role="status" className="text-xs text-muted-foreground">{testResults[i]}</p>}
+            {testResults[i] && <div role="status" className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${testResults[i].startsWith("সফল:") ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : testResults[i].startsWith("পরীক্ষা চলছে") || testResults[i].startsWith("আনা হচ্ছে") ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-destructive/40 bg-destructive/10 text-destructive"}`}><span className={`h-2 w-2 shrink-0 rounded-full ${testResults[i].startsWith("সফল:") ? "bg-emerald-500" : testResults[i].startsWith("পরীক্ষা চলছে") || testResults[i].startsWith("আনা হচ্ছে") ? "animate-pulse bg-amber-500" : "bg-destructive"}`} /><span>{testResults[i]}</span></div>}
           </div>
         ))}
       </div>
