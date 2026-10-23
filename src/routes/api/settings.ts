@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/settings")({
           const m = data.admin_note.match(/<!--CONFIG:(.*?)-->/);
           if (m) {
             try {
-              const cfg = JSON.parse(m[1]);
+              const cfg = JSON.parse(m[1] ?? "{}");
               if (cfg && typeof cfg === "object") {
                 if (cfg.modes && typeof cfg.modes === "object") {
                   modes = { ...defaultModes, ...cfg.modes };
