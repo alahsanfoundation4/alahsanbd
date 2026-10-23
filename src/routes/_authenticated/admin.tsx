@@ -53,7 +53,7 @@ function AdminPage() {
         const m = note.match(/<!--CONFIG:(.*?)-->/);
         if (m) {
           try {
-            const cfg = JSON.parse(m[1] ?? "{}");
+            const cfg = JSON.parse(m[1]);
             if (cfg.modes) setChatModes((prev) => ({ ...prev, ...cfg.modes }));
             if (Array.isArray(cfg.allowed_models) && cfg.allowed_models.length > 0) setAllowedModels(cfg.allowed_models);
           } catch {}
@@ -103,8 +103,8 @@ function AdminPage() {
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
     const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
-    const cleanPool = pool.filter((p) => p.provider === "jsonplaceholder" || p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
-      .filter((p) => { if (p.provider === "jsonplaceholder") return true; if (seen.has(p.key)) return false; seen.add(p.key); return true; }).slice(0, 10);
+    const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
+      .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
     setPool(cleanPool);
     const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }, { onConflict: "id" });
     const err = r1.error || r2.error;
@@ -426,30 +426,16 @@ function FatwaBank() {
 }
 
 
-type PoolProvider = "google" | "openai" | "groq" | "openrouter" | "weather" | "jsonplaceholder" | "custom";
-type PoolKey = { name: string; provider: PoolProvider; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "openai" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
-  const [testing, setTesting] = useState<number | null>(null);
-  const [testResults, setTestResults] = useState<Record<number, string>>({});
-  const testIntegration = async (index: number) => {
-    setTesting(index);
-    setTestResults((prev) => ({ ...prev, [index]: "পরীক্ষা চলছে…" }));
-    try {
-      const { data } = await supabase.auth.getSession();
-      const response = await fetch("/api/integrations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify({ index }) });
-      const result = await response.json().catch(() => ({}));
-      setTestResults((prev) => ({ ...prev, [index]: response.ok ? `সফল: ${result.message ?? "API সচল"}` : `ব্যর্থ: ${result.error ?? "API পরীক্ষা ব্যর্থ"}` }));
-    } catch { setTestResults((prev) => ({ ...prev, [index]: "ব্যর্থ: নেটওয়ার্ক সংযোগ পরীক্ষা করুন" })); }
-    finally { setTesting(null); }
-  };
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
   const upd = (i: number, patch: Partial<PoolKey>) => setPool(pool.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <h2 className="font-display text-xl text-primary">৪ক. অতিরিক্ত AI ও ডেটা API</h2>
+      <h2 className="font-display text-xl text-primary">৪ক. সেকেন্ডারি ব্যাকআপ কী (Backup Key - Zero Downtime, সর্বোচ্চ ২টি)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Groq ও OpenRouter চ্যাটের বিকল্প AI হিসেবে কাজ করবে। OpenWeatherMap আবহাওয়ার API key নেয়; JSONPlaceholder-এর কোনো key লাগে না। API ও মডেলের প্রাপ্যতা/সীমা আপনার provider account অনুযায়ী বদলাতে পারে। একই key একাধিকবার দিলে সংরক্ষণের সময় বাদ যাবে।
+        সর্বোচ্চ ২টি ব্যাকআপ কী রাখা যায়; একই কী দুবার থাকলে সংরক্ষণের সময় স্বয়ংক্রিয়ভাবে বাদ যাবে। মূল কী কাজ না করলে (লিমিট শেষ হলে) এআই নিজে থেকেই তালিকার পরের কী দিয়ে চেষ্টা করবে। "অন্য সেবা" দিয়ে Groq, DeepSeek, OpenRouter-এর মতো যেকোনো সেবা যোগ করা যায়। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
       </p>
       <div className="mt-4 space-y-3">
         {pool.map((p, i) => (
@@ -457,39 +443,28 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
             <div className="flex min-w-0 gap-2">
               <input value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="নাম (যেমন: Google কী ২)" className={input} />
               <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
-                <option value="google">Google Gemini</option>
+                <option value="google">Google</option>
                 <option value="openai">OpenAI</option>
-                <option value="groq">Groq</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="weather">OpenWeatherMap</option>
-                <option value="jsonplaceholder">JSONPlaceholder (key লাগে না)</option>
-                <option value="custom">অন্য OpenAI-compatible API</option>
+                <option value="custom">অন্য সেবা</option>
               </select>
             </div>
-            {p.provider !== "jsonplaceholder" && <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder={p.provider === "weather" ? "OpenWeatherMap API key" : "এপিআই কী"} className={input} />}
-            {(p.provider === "custom" || p.provider === "groq" || p.provider === "openrouter") && (
+            <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
+            {p.provider === "custom" && (
               <div className="flex gap-2">
-                {p.provider === "custom" && <input value={p.base_url ?? ""} onChange={(e) => upd(i, { base_url: e.target.value })} placeholder="Base URL (HTTPS)" className={input} />}
-                <input value={p.model ?? ""} onChange={(e) => upd(i, { model: e.target.value })} placeholder={p.provider === "openrouter" ? "openrouter/free (default)" : p.provider === "groq" ? "llama-3.3-70b-versatile (default)" : "মডেলের নাম"} className={input} />
+                <input value={p.base_url ?? ""} onChange={(e) => upd(i, { base_url: e.target.value })} placeholder="ঠিকানা, যেমন https://api.groq.com/openai/v1" className={input} />
+                <input value={p.model ?? ""} onChange={(e) => upd(i, { model: e.target.value })} placeholder="মডেলের নাম" className={input} />
               </div>
             )}
-            {p.provider === "weather" && <input value={p.model ?? "Dhaka"} onChange={(e) => upd(i, { model: e.target.value })} placeholder="পরীক্ষার শহর (যেমন Dhaka)" className={input} />}
-            {p.provider === "jsonplaceholder" && <input value={p.model ?? "posts/1"} onChange={(e) => upd(i, { model: e.target.value })} placeholder="পরীক্ষার পথ: posts/1" className={input} />}
-            {(p.provider === "weather" || p.provider === "jsonplaceholder") && <p className="text-xs text-muted-foreground">{p.provider === "weather" ? "শহরের নাম দিয়ে OpenWeatherMap-এর বর্তমান আবহাওয়া সংযোগ পরীক্ষা করুন।" : "JSONPlaceholder-এ posts/1 বা todos/1-এর মতো read-only পথ পরীক্ষা করুন; API key লাগে না।"}</p>}
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={p.active} onChange={(e) => upd(i, { active: e.target.checked })} /> চালু
               </label>
-              <div className="flex items-center gap-3">
-                {(p.provider === "weather" || p.provider === "jsonplaceholder") && <button onClick={() => testIntegration(i)} disabled={testing === i} className="text-primary disabled:opacity-50">API পরীক্ষা</button>}
-                <button onClick={() => setPool(pool.filter((_, j) => j !== i))} className="text-destructive">মুছুন</button>
-              </div>
+              <button onClick={() => setPool(pool.filter((_, j) => j !== i))} className="text-destructive">মুছুন</button>
             </div>
-            {testResults[i] && <p role="status" className="text-xs text-muted-foreground">{testResults[i]}</p>}
           </div>
         ))}
       </div>
-      {pool.length < 10 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
+      {pool.length < 2 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
         className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm text-primary">+ নতুন কী যোগ করুন</button>}
     </section>
   );
