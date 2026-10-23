@@ -467,6 +467,11 @@ async function handleChat(request: Request): Promise<Response> {
       }
     } else if (selectedModelMeta.provider === "openai" && openaiKey) {
       add({ url: OPENAI_URL, key: openaiKey, model: selectedModelMeta.id, label: "openai:user", google: false });
+    } else if (selectedModelMeta.provider === "groq" || selectedModelMeta.provider === "openrouter") {
+      for (const p of pool.filter((item) => item.provider === selectedModelMeta.provider && item.active !== false)) {
+        const key = cleanKey(p.key);
+        if (key) add({ url: selectedModelMeta.provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions", key, model: selectedModelMeta.id, label: `${selectedModelMeta.provider}:user`, google: false });
+      }
     }
   }
 
@@ -493,9 +498,12 @@ async function handleChat(request: Request): Promise<Response> {
       label: "openai:admin",
       google: false,
     });
+  } else if (adminProvider === "groq" || adminProvider === "openrouter") {
+    const selected = pool.find((item) => item.provider === adminProvider && item.active !== false && cleanKey(item.key));
+    if (selected) add({ url: adminProvider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions", key: cleanKey(selected.key), model: adminModel || selected.model?.trim() || (adminProvider === "groq" ? "llama-3.3-70b-versatile" : "openrouter/free"), label: `${adminProvider}:admin`, google: false });
   }
 
-  // ৩. গুগল রিজনিং চেইন (যেসব মডেল দ্রুত ও কার্যকর)
+  // ৩. ഗুগল റিজনিং চেইন (যেসব মডেল দ্রুত ও কার্যকর)
   for (const model of googleChain) {
     for (const key of rotatedGoogle) {
       add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
