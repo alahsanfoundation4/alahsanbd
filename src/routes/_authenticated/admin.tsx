@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, GROQ_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -66,7 +66,7 @@ function AdminPage() {
   if (!s) return <div className="min-h-screen bg-background p-8 text-muted-foreground">লোড হচ্ছে…</div>;
 
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
-  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "openai" ? OPENAI_MODELS : LOVABLE_MODELS);
+  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "groq" ? GROQ_MODELS : LOVABLE_MODELS);    
   const models = listFor(s.provider);
 
   const save = async () => {
@@ -131,7 +131,7 @@ function AdminPage() {
         <section className={card}>
           <h2 className={h2}>৩. এআই মোড, মডেল ও চিন্তার গভীরতা</h2>
           <div className="mt-4 grid grid-cols-3 gap-2">
-            {([["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["openai", "OpenAI"]] as const).map(([p, l]) => (
+            {([["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["groq", "Groq"]] as const).map(([p, l]) => (
               <button key={p} onClick={() => setS({ ...s, provider: p, model: listFor(p)[0]?.id ?? "" })}
                 className={`rounded-lg border px-3 py-3 text-sm ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border"}`}>{l}</button>
             ))}
@@ -159,11 +159,12 @@ function AdminPage() {
               {show ? <EyeOff size={15} /> : <Eye size={15} />} {show ? "লুকান" : "দেখুন"}
             </button>
           </div>
-          <p className={hint}>শুধু অ্যাডমিন দেখতে পান। Google বা OpenAI মোড বেছে নিলে এই কী ব্যবহার হবে। বিল্ট-ইন মোডে কী লাগে না।</p>
-          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key</label>
-          <input type={show ? "text" : "password"} value={gKey} onChange={(e) => setGKey(e.target.value)} className={`${input} mt-1`} placeholder="AIza…" />
-          <label className="mt-3 block text-sm text-muted-foreground">OpenAI API Key</label>
-          <input type={show ? "text" : "password"} value={oKey} onChange={(e) => setOKey(e.target.value)} className={`${input} mt-1`} placeholder="sk-…" />
+          <p className={hint}>শুধু অ্যাডমিন দেখতে পান। Google বা Groq মোড বেছে নিলে এই কী ব্যবহার হবে।</p>
+         <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key</label>
+         <input type={show ? "text" : "password"} value={gKey} onChange={(e) => setGKey(e.target.value)} className={`${input} mt-1`} placeholder="AQ…" />
+         <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (gsk_...)</label>
+         <input type={show ? "text" : "password"} value={oKey} onChange={(e) => setOKey(e.target.value)} className={`${input} mt-1`} placeholder="gsk_..." />
+
         </section>
 
         <section className={card}>
@@ -331,7 +332,7 @@ function FatwaBank() {
 }
 
 
-type PoolKey = { name: string; provider: "google" | "openai" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "groq" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -349,8 +350,8 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
               <input value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="নাম (যেমন: Google কী ২)" className={input} />
               <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
                 <option value="google">Google</option>
-                <option value="openai">OpenAI</option>
-                <option value="custom">অন্য সেবা</option>
+                <option value="groq">Groq</option>
+               <option value="custom">অন্য সেবা</option>
               </select>
             </div>
             <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
