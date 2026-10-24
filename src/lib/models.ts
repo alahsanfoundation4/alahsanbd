@@ -18,15 +18,15 @@ export const GOOGLE_MODELS = [
 ];
 
 export const GROQ_MODELS = [
-  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (সেরা যুক্তি ও বাংলা মান)" },
-  { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant (অতি দ্রুত গতি)" },
-  { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B (Groq চালিত)" },
+  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B (Groq চালিত সেরা বাংলা)" },
+  { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B (Groq হাই-পাওয়ার)" },
+  { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B (Groq অতি দ্রুত)" },
 ];
-
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
   lovable: "openai/gpt-6-astra",
   google: "gemini-3.8-flash",
-  groq: "llama-3.3-70b-versatile",
+  groq: "qwen/qwen3.8-27b",
 };
+
 
