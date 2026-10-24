@@ -125,7 +125,7 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
     saveBlob(await Packer.toBlob(d), "al-ahsan-answer.docx");
   } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
-import { LOVABLE_MODELS, ALL_AVAILABLE_MODELS } from "@/lib/models";
+import { LOVABLE_MODELS } from "@/lib/models";
 import { Settings as SettingsIcon, Camera, MonitorUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
@@ -380,7 +380,7 @@ function ChatPage() {
   const [sidebar, setSidebar] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [camOpen, setCamOpen] = useState(false);
-  const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string; modes?: { study?: boolean; write?: boolean; code?: boolean; engineer?: boolean }; allowed_models?: string[] }>({});
+  const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
   const [speaking, setSpeaking] = useState<number | null>(null);
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
   const recRef = useRef<any>(null);
@@ -541,7 +541,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}), ...(mode ? { mode } : {}) }),
+        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) { const detail = await res.text(); const message = /[\u0980-\u09ff]/.test(detail) ? detail.slice(0, 1200) : serviceError(res.status, detail); toast.error(message); throw new Error(message); }
@@ -760,10 +760,10 @@ function ChatPage() {
             <PopoverContent align="end" className="w-64 space-y-3">
               {msgs.length > 0 && <div className="flex gap-2 sm:hidden"><Button variant="outline" onClick={() => printChat(msgs)}><Printer />PDF</Button><Button variant="outline" onClick={() => downloadChat(msgs)}><Download />ডাউনলোড</Button></div>}
               <label className="block text-xs text-muted-foreground">কাজের ধরন
-                <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">সাধারণ</option>{MODES.filter((x) => (cfg.modes ? (cfg.modes as Record<string, boolean>)[x.id] !== false : true)).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+                <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">সাধারণ</option>{MODES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
               </label>
               <label className="block text-xs text-muted-foreground">AI মডেল
-                <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">স্বয়ংক্রিয় (অ্যাডমিন নির্ধারিত)</option>{(ALL_AVAILABLE_MODELS.filter((m) => !cfg.allowed_models || cfg.allowed_models.length === 0 || cfg.allowed_models.includes(m.id))).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+                <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">স্বয়ংক্রিয় (দ্রুত)</option>{LOVABLE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
               </label>
             </PopoverContent>
           </Popover>

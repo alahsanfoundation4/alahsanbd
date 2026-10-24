@@ -76,33 +76,9 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   async pool(c) {
     const pool: any[] = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
     await Promise.all(pool.map(async (p, i) => {
-      if (p?.active === false) return;
-      if (p.provider === "jsonplaceholder") {
-        const path = String(p.model || "posts/1").trim().replace(/^\/+|\/+$/g, "");
-        if (!/^(posts|todos|users|comments|albums|photos)(\/\d+)?$/.test(path)) return void c.issues.push({ id: `pool:${i}`, area: "API utility", title: "JSONPlaceholder path অনুমোদিত নয়", detail: "posts/1, todos/1 বা users/1 ব্যবহার করুন" });
-        const response = await fetch(`https://jsonplaceholder.typicode.com/${path}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
-        if (response?.ok) return void c.passed.push(`JSONPlaceholder (${path})`);
-        c.issues.push({ id: `pool:${i}`, area: "API utility", title: "JSONPlaceholder সাড়া দিচ্ছে না", detail: `স্ট্যাটাস: ${response?.status ?? "network"}` });
-        return;
-      }
-      if (!p?.key?.trim()) return;
-      if (p.provider === "weather") {
-        const city = String(p.model || "Dhaka").trim();
-        const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${encodeURIComponent(p.key.trim())}&units=metric`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
-        if (r?.ok) return void c.passed.push(`OpenWeatherMap (${city})`);
-        c.issues.push({ id: `pool:${i}`, area: "API utility", title: `OpenWeatherMap সাড়া দিচ্ছে না — ${classify(r?.status ?? 599, "")}`, detail: `শহর: ${city}; স্ট্যাটাস: ${r?.status ?? "network"}` });
-        return;
-      }
-      if (p.provider === "jsonplaceholder") {
-        const path = String(p.model || "posts/1").replace(/^\/+|\/+$/g, "");
-        if (!/^(posts|todos|users|comments|albums|photos)(\/\d+)?$/.test(path)) { c.issues.push({ id: `pool:${i}`, area: "API utility", title: "JSONPlaceholder path অনুমোদিত নয়", detail: "posts/1, todos/1 বা users/1 ব্যবহার করুন" }); return; }
-        const r = await fetch(`https://jsonplaceholder.typicode.com/${path}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
-        if (r?.ok) return void c.passed.push(`JSONPlaceholder (${path})`);
-        c.issues.push({ id: `pool:${i}`, area: "API utility", title: "JSONPlaceholder সাড়া দিচ্ছে না", detail: `স্ট্যাটাস: ${r?.status ?? "network"}` });
-        return;
-      }
-      const url = p.provider === "custom" ? `${String(p.base_url ?? "").replace(/\/$/, "")}/chat/completions` : p.provider === "openai" ? "https://api.openai.com/v1/chat/completions" : p.provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : p.provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" : GOOGLE_CHAT;
-      const model = p.model?.trim() || (p.provider === "google" ? c.settings?.model || "gemini-3.8-flash" : p.provider === "groq" ? "llama-3.3-70b-versatile" : p.provider === "openrouter" ? "openrouter/free" : "gpt-4o");
+      if (p?.active === false || !p?.key?.trim()) return;
+      const url = p.provider === "custom" ? `${String(p.base_url ?? "").replace(/\/$/, "")}/chat/completions` : p.provider === "openai" ? "https://api.openai.com/v1/chat/completions" : GOOGLE_CHAT;
+      const model = p.model?.trim() || (p.provider === "google" ? c.settings?.model || "gemini-3.8-flash" : "gpt-4o");
       const r = await chatCall(url, p.key.trim(), model, "ok");
       if (r.ok) return void c.passed.push(`অতিরিক্ত কী: ${p.name || i + 1}`);
       const temp = r.status === 429 || r.status >= 500;
@@ -129,7 +105,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
     const pool: any[] = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
     const all = [c.keys?.google_key, c.keys?.openai_key, ...pool.map((p) => p?.key)].map((k) => String(k ?? "").trim()).filter(Boolean);
     if (new Set(all).size !== all.length) c.issues.push({ id: "keys:dup", area: "কী", title: "একই এপিআই কী একাধিকবার আছে", detail: "সেটিংসে গিয়ে সংরক্ষণ করুন — ডুপ্লিকেট স্বয়ংক্রিয়ভাবে বাদ যাবে" });
-    else if (pool.length > 10) c.issues.push({ id: "keys:many", area: "কী", title: `ইন্টিগ্রেশন ${pool.length}টি — সর্বোচ্চ ১০টি রাখুন`, detail: "সেটিংসে সংরক্ষণ করলে প্রথম ১০টি থাকবে" });
+    else if (pool.length > 2) c.issues.push({ id: "keys:many", area: "কী", title: `ব্যাকআপ কী ${pool.length}টি — সর্বোচ্চ ২টি রাখুন`, detail: "সেটিংসে সংরক্ষণ করলে প্রথম ২টি থাকবে" });
     else c.passed.push("এপিআই কী ব্যবস্থাপনা");
   },
   async admin(c) {

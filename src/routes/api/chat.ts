@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { LOVABLE_MODELS, ALL_AVAILABLE_MODELS } from "@/lib/models";
+import { LOVABLE_MODELS } from "@/lib/models";
 import { GPT_ENGINEER_PROMPT, needsCodeEngine } from "@/lib/gpt-engineer";
 
 const Body = z.object({
@@ -98,16 +98,6 @@ const EVIDENCE_PROTOCOL = `
 10. উৎস ব্যবহার করলে শেষে "### সূত্র" শিরোনামে সেগুলো তালিকাভুক্ত করবে।
 `;
 
-const VERIFY_BEFORE_ANSWER = `
-## উত্তর দেওয়ার আগে বাধ্যতামূলক যাচাই
-1. উত্তর লেখার আগে মনে মনে প্রতিটি তথ্যভিত্তিক দাবি অনুসন্ধানের উৎসের সাথে মিলিয়ে নেবে।
-2. দুটি উৎসে অমিল থাকলে অমিলটি স্পষ্ট বলবে; একটিকে জোর করে সত্য বলবে না।
-3. শুধু "সাধারণ ওয়েব উৎস" থাকলে নিশ্চিত ভঙ্গিতে নয়, সীমাবদ্ধতা উল্লেখ করে বলবে।
-4. উৎসে নেই এমন নাম, সংখ্যা, তারিখ, পদ, দাম বা লিংক কখনো যোগ করবে না।
-5. নিশ্চিত না হলে স্পষ্ট বলবে "নিশ্চিত নই" এবং কী যাচাই করা দরকার তা জানাবে।
-6. ব্যবহারকারীর প্রশ্নের ভুল ধারণা সংশোধন করবে, সমর্থন করবে না।
-`;
-
 const SITE_BUILDER_PROMPT = `## ওয়েবসাইট ও ওয়েব অ্যাপ নির্মাতা (Production Grade)
 ব্যবহারকারী যেকোনো ওয়েবসাইট, landing page, ecommerce, portal, SaaS UI বা dashboard চাইলে:
 ১. সম্পূর্ণ, self-contained, production-grade HTML/CSS/JS কোড দেবে।
@@ -156,15 +146,15 @@ const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 export const GOOGLE_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
-  general: ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  quick: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
+  general: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
   code: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
   engineer: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"],
 };
 
 const GATEWAY_CHAINS: Record<TaskKind, string[]> = {
-  quick: ["google/gemini-3.1-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
-  general: ["google/gemini-3.5-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  quick: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
+  general: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
   code: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
   engineer: ["google/gemini-3.8-flash", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite"],
 };
@@ -191,7 +181,7 @@ export function tokenBudget(kind: TaskKind, site: boolean): number {
 
 export function firstTokenBudget(kind: TaskKind, pass: 1 | 2): number {
   if (pass === 2) return 25000;
-  return kind === "quick" || kind === "general" ? 3500 : 5000;
+  return kind === "quick" || kind === "general" ? 3500 : 9000;
 }
 
 const cooldown = new Map<string, number>();
@@ -422,13 +412,13 @@ async function handleChat(request: Request): Promise<Response> {
     }
   }
 
-  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {}, () => {});
+  void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).catch(() => {});
 
   type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
 
   const pool: PoolKey[] = (Array.isArray(keys?.key_pool) ? (keys.key_pool as PoolKey[]) : [])
-    .filter((p) => p && p.active !== false && typeof p.key === "string" && p.key.trim() && ["google", "openai", "groq", "openrouter", "custom"].includes(String(p.provider)))
-    .slice(0, 10);
+    .filter((p) => p && p.active !== false && typeof p.key === "string" && p.key.trim())
+    .slice(0, 2);
 
   const googleKeys = [...new Set(
     [
@@ -439,9 +429,9 @@ async function handleChat(request: Request): Promise<Response> {
 
   const openaiKey = cleanKey(keys?.openai_key) || cleanKey(process.env["OPENAI_API_KEY"]);
   const gatewayKey = cleanKey(process.env["LOVABLE_API_KEY"]);
+  const userModel = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : "";
   const adminProvider = String(s?.provider ?? "google");
   const adminModel = String(s?.model ?? "").trim();
-  const adminReasoningEffort = String(s?.reasoning_effort ?? "low").trim();
 
   const attempts: Attempt[] = [];
   const add = (a: Attempt) => {
@@ -451,97 +441,63 @@ async function handleChat(request: Request): Promise<Response> {
   };
 
   const googleChain = [...GOOGLE_CHAINS[kind]];
+
   const rotatedGoogle = rotate(googleKeys, rrCounter++);
 
-  // ১. ব্যবহারকারী যদি চ্যাট ইন্টারফেসে নির্দিষ্ট মডেল বাছাই করে থাকেন, তবে সেটিই প্রথম অগ্রাধিকার
-  const selectedModelMeta = parsed.data.model
-    ? ALL_AVAILABLE_MODELS.find((m) => m.id === parsed.data.model)
-    : undefined;
-
-  if (selectedModelMeta) {
-    if (selectedModelMeta.provider === "lovable" && gatewayKey) {
-      add({ url: GATEWAY_URL, key: gatewayKey, model: selectedModelMeta.id, label: "gateway:user", google: false });
-    } else if (selectedModelMeta.provider === "google" && rotatedGoogle.length > 0) {
+  if (isEngineer) {
+    for (const model of googleChain) {
       for (const key of rotatedGoogle) {
-        add({ url: GOOGLE_URL, key, model: selectedModelMeta.id, label: "google:user", google: true });
-      }
-    } else if (selectedModelMeta.provider === "openai" && openaiKey) {
-      add({ url: OPENAI_URL, key: openaiKey, model: selectedModelMeta.id, label: "openai:user", google: false });
-    } else if (selectedModelMeta.provider === "groq" || selectedModelMeta.provider === "openrouter") {
-      for (const p of pool.filter((item) => item.provider === selectedModelMeta.provider && item.active !== false)) {
-        const key = cleanKey(p.key);
-        if (key) add({ url: selectedModelMeta.provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions", key, model: selectedModelMeta.id, label: `${selectedModelMeta.provider}:user`, google: false });
+        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
       }
     }
-  }
-
-  // ২. অ্যাডমিন প্যানেলে নির্ধারিত প্রোভাইডার ও মডেলের সর্বোচ্চ অগ্রাধিকার (সাধারণ ও ইঞ্জিনিয়ার উভয় মোডেই)
-  if (adminProvider === "google" && rotatedGoogle.length > 0) {
-    if (adminModel) {
-      for (const key of rotatedGoogle) {
-        add({ url: GOOGLE_URL, key, model: adminModel, label: "google:admin", google: true });
-      }
-    }
-  } else if (adminProvider === "lovable" && gatewayKey) {
-    add({
-      url: GATEWAY_URL,
-      key: gatewayKey,
-      model: adminModel || GATEWAY_CHAINS[kind][0]!,
-      label: "gateway:admin",
-      google: false,
-    });
-  } else if (adminProvider === "openai" && openaiKey) {
-    add({
-      url: OPENAI_URL,
-      key: openaiKey,
-      model: adminModel || "gpt-5.5",
-      label: "openai:admin",
-      google: false,
-    });
-  } else if (adminProvider === "groq" || adminProvider === "openrouter") {
-    const selected = pool.find((item) => item.provider === adminProvider && item.active !== false && cleanKey(item.key));
-    if (selected) add({ url: adminProvider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions", key: cleanKey(selected.key), model: adminModel || selected.model?.trim() || (adminProvider === "groq" ? "llama-3.3-70b-versatile" : "openrouter/free"), label: `${adminProvider}:admin`, google: false });
-  }
-
-  // ৩. ഗুগল റিজনিং চেইন (যেসব মডেল দ্রুত ও কার্যকর)
-  for (const model of googleChain) {
-    for (const key of rotatedGoogle) {
-      add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
-    }
-  }
-
-  // ৪. ব্যাকআপ কী পুল
-  for (const p of pool) {
-    const key = cleanKey(p.key);
-    if (!key) continue;
-
-    const customUrl = normalizeCustomEndpoint(p.base_url);
-    if (p.provider === "custom" && customUrl) {
+  } else {
+    const preferGateway = Boolean(gatewayKey) && (Boolean(userModel) || adminProvider === "lovable");
+    if (preferGateway) {
       add({
-        url: customUrl,
-        key,
-        model: p.model?.trim() || "llama-3.3-70b-versatile",
-        label: `custom:${p.name ?? ""}`,
+        url: GATEWAY_URL,
+        key: gatewayKey,
+        model: GATEWAY_CHAINS[kind][0]!,
+        label: "gateway:preferred",
         google: false,
       });
-    } else if (p.provider === "openai") {
-      add({ url: OPENAI_URL, key, model: p.model?.trim() || "gpt-4o", label: `openai-pool:${p.name ?? ""}`, google: false });
-    } else if (p.provider === "groq") {
-      add({ url: "https://api.groq.com/openai/v1/chat/completions", key, model: p.model?.trim() || "llama-3.3-70b-versatile", label: `groq:${p.name ?? ""}`, google: false });
-    } else if (p.provider === "openrouter") {
-      add({ url: "https://openrouter.ai/api/v1/chat/completions", key, model: p.model?.trim() || "openrouter/free", label: `openrouter:${p.name ?? ""}`, google: false });
     }
-  }
 
-  // ৫. ওপেনএআই ব্যাকআপ
-  if (openaiKey) {
-    add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
-  }
+    if (adminProvider === "openai" && openaiKey) {
+      add({ url: OPENAI_URL, key: openaiKey, model: adminModel || "gpt-4o", label: "openai:admin", google: false });
+    }
 
-  // ৬. গেটওয়ে চেইন ব্যাকআপ
-  if (gatewayKey) {
-    for (const model of GATEWAY_CHAINS[kind]) {
-      add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
+    for (const model of googleChain) {
+      for (const key of rotatedGoogle) {
+        add({ url: GOOGLE_URL, key, model, label: `google:${model}`, google: true });
+      }
+    }
+
+    for (const p of pool) {
+      const key = cleanKey(p.key);
+      if (!key) continue;
+
+      const customUrl = normalizeCustomEndpoint(p.base_url);
+      if (p.provider === "custom" && customUrl) {
+        add({
+          url: customUrl,
+          key,
+          model: p.model?.trim() || "llama-3.3-70b-versatile",
+          label: `custom:${p.name ?? ""}`,
+          google: false,
+        });
+      } else if (p.provider === "openai") {
+        add({ url: OPENAI_URL, key, model: p.model?.trim() || "gpt-4o", label: `openai-pool:${p.name ?? ""}`, google: false });
+      }
+    }
+
+    if (openaiKey) {
+      add({ url: OPENAI_URL, key: openaiKey, model: "gpt-4o", label: "openai:backup", google: false });
+    }
+
+    if (gatewayKey) {
+      for (const model of GATEWAY_CHAINS[kind]) {
+        add({ url: GATEWAY_URL, key: gatewayKey, model, label: `gateway:${model}`, google: false });
+      }
     }
   }
 
@@ -648,35 +604,6 @@ async function handleChat(request: Request): Promise<Response> {
         if (isAdmin) system += `\n\n[সেশন]: ব্যবহারকারী সিস্টেমের ভেরিফাইড অ্যাডমিন।`;
 
         const textMsgs = msgsIn.map((m) => ({ role: m.role, content: m.content }));
-
-        // Optional admin-configured data APIs enrich matching questions; keys never leave the server.
-        const weatherConfig = pool.find((p) => p.provider === "weather" && p.active !== false && p.key?.trim());
-        const jsonConfig = pool.find((p) => p.provider === "jsonplaceholder" && p.active !== false);
-        if (weatherConfig && /আবহাওয়া|তাপমাত্রা|weather|temperature|বৃষ্টি|rain/i.test(lastMsgText)) {
-          const cityMatch = lastMsgText.match(/(?:in|for|at|শহর|শহরে|ঢাকায়|in the city of)\s+([\p{L}][\p{L} .'-]{1,50})/iu);
-          const city = cityMatch?.[1]?.trim().replace(/[?.!,;:]+$/, "") || weatherConfig.model?.trim() || "Dhaka";
-          try {
-            const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${encodeURIComponent(weatherConfig.key!.trim())}&units=metric`, { signal: AbortSignal.timeout(8000) });
-            if (weatherResponse.ok) {
-              const data = await weatherResponse.json() as { name?: string; main?: { temp?: number; feels_like?: number; humidity?: number }; weather?: Array<{ description?: string }> };
-              system += `\n\n=== OpenWeatherMap-এর বর্তমান তথ্য (লাইভ) ===\nস্থান: ${data.name ?? city}; তাপমাত্রা: ${data.main?.temp ?? "অজানা"}°C; অনুভূত: ${data.main?.feels_like ?? "অজানা"}°C; আর্দ্রতা: ${data.main?.humidity ?? "অজানা"}%; অবস্থা: ${data.weather?.[0]?.description ?? "অজানা"}. এই তথ্যের সময়: ${new Date().toISOString()}.`;
-            } else {
-              system += `\n\nOpenWeatherMap থেকে ${city} শহরের তথ্য পাওয়া যায়নি (HTTP ${weatherResponse.status}); আবহাওয়া অনুমান না করে এ কথা বলো।`;
-            }
-          } catch { system += `\n\nOpenWeatherMap এখন সংযোগযোগ্য নয়; আবহাওয়া অনুমান না করে এ কথা বলো।`; }
-        }
-        if (jsonConfig && /jsonplaceholder/i.test(lastMsgText)) {
-          const path = String(jsonConfig.model || "posts/1").trim().replace(/^\/+|\/+$/g, "");
-          if (/^(posts|todos|users|comments|albums|photos)(\/\d+)?$/.test(path)) {
-            try {
-              const response = await fetch(`https://jsonplaceholder.typicode.com/${path}`, { signal: AbortSignal.timeout(8000) });
-              if (response.ok) {
-                const data = await response.json();
-                system += `\n\n=== JSONPlaceholder ডেমো API (লাইভ, বাস্তব ব্যক্তিগত তথ্য নয়) ===\nEndpoint: ${path}\n${JSON.stringify(data).slice(0, 4000)}\nউত্তরে এটিকে স্পষ্টভাবে ডেমো ডেটা হিসেবে পরিচয় করাও।`;
-              }
-            } catch { /* Utility API is optional; the model can still answer normally. */ }
-          }
-        }
         const wantsUrl = s?.url_reader !== false && /https?:\/\//.test(lastMsgText);
 
         if (shouldSearch) stage("search");
@@ -705,12 +632,12 @@ async function handleChat(request: Request): Promise<Response> {
             return finish();
           }
 
-          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}\n\n${VERIFY_BEFORE_ANSWER}`;
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
           system += found.count
             ? `\n\n=== অনুসন্ধানের উৎস (${found.count}টি, লাইভ) ===\nনিচের উৎসের বাইরে কোনো সুনির্দিষ্ট দাবি করা যাবে না।\n\n${found.text}`
             : `\n\n=== অনুসন্ধানের উৎস ===\nলাইভ অনুসন্ধানে নির্ভরযোগ্য ফল পাওয়া যায়নি। অনুমান করা নিষিদ্ধ। নিশ্চিত তথ্যের জন্য প্রামাণ্য ও প্রাথমিক উৎস দরকার।`;
         } else if (web) {
-          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}\n\n${VERIFY_BEFORE_ANSWER}`;
+          system += `\n\n${GROUNDING_RULES}\n\n${EVIDENCE_PROTOCOL}`;
         }
 
         system += `\n\n${INTEGRITY}`;
@@ -728,7 +655,7 @@ async function handleChat(request: Request): Promise<Response> {
 
         const basePayload = {
           stream: true,
-          temperature: isSiteReq ? 0.4 : shouldSearch ? 0.1 : 0.2,
+          temperature: isSiteReq ? 0.4 : 0.2,
           max_tokens: tokenBudget(kind, isSiteReq),
           messages: [{ role: "system", content: system }, ...msgs],
         };
@@ -744,7 +671,7 @@ async function handleChat(request: Request): Promise<Response> {
             if ((deadKeys.get(keyId(a.key)) ?? 0) > Date.now()) continue;
             if (pass === 1 && isCooling(a) && attempts.some((x) => !isCooling(x))) continue;
 
-            const r = await tryAttempt(a, basePayload, kind, firstTokenBudget(kind, pass), clientGone.signal, adminReasoningEffort);
+            const r = await tryAttempt(a, basePayload, kind, firstTokenBudget(kind, pass), clientGone.signal);
             if (r.ok) {
               opened = { reader: r.reader, first: r.first, label: a.label, abort: r.abort };
               break;
@@ -835,14 +762,7 @@ type TryResult =
   | { ok: true; reader: ReadableStreamDefaultReader<Uint8Array>; first: Uint8Array; abort: AbortController }
   | { ok: false; status: number; text: string };
 
-async function tryAttempt(
-  a: Attempt,
-  base: Record<string, unknown>,
-  kind: TaskKind,
-  budgetMs: number,
-  clientSignal: AbortSignal,
-  reasoningEffort?: string
-): Promise<TryResult> {
+async function tryAttempt(a: Attempt, base: Record<string, unknown>, kind: TaskKind, budgetMs: number, clientSignal: AbortSignal): Promise<TryResult> {
   const abort = new AbortController();
   const onClient = () => abort.abort();
   clientSignal.addEventListener("abort", onClient, { once: true });
@@ -850,15 +770,8 @@ async function tryAttempt(
   const timer = setTimeout(() => abort.abort(), budgetMs);
   const payload: Record<string, unknown> = { ...base, model: a.model };
 
-  const effort = reasoningEffort || (kind === "quick" || kind === "general" ? "minimal" : "low");
-  const normalizedEffort = effort === "xhigh" ? "high" : effort;
-
   if (a.google) {
-    payload["reasoning_effort"] = normalizedEffort;
-  } else if (a.url === GATEWAY_URL || a.url === OPENAI_URL) {
-    if (normalizedEffort && normalizedEffort !== "none") {
-      payload["reasoning_effort"] = normalizedEffort;
-    }
+    payload["reasoning_effort"] = kind === "quick" || kind === "general" ? "minimal" : "low";
   }
 
   if (a.url === OPENAI_URL && /^gpt-5|^o\d/.test(a.model)) {
@@ -1092,11 +1005,7 @@ export function assessVerificationNeed(
     context.isCode &&
     /(api|sdk|লাইব্রেরি|package|প্যাকেজ|react|typescript|javascript|python|node|version|ভার্সন|release|documentation|ডকুমেন্টেশন|latest|stable)/i.test(query);
 
-  const creativeOrBuild = context.isSiteReq || context.isEngineer || (context.isCode && !technicalFreshness);
-  const substantive = !creativeOrBuild && query.length >= 8;
-
-  const search =
-    identity || localInstitution || timeSensitive || highRisk || technicalFreshness || asksForFacts || substantive;
+  const search = identity || localInstitution || timeSensitive || highRisk || technicalFreshness || asksForFacts;
 
   return {
     search,
