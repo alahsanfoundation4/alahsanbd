@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
 import { buildSearchQuery, FOLLOWUP_SEARCH } from "@/lib/search-query";
-
 const Body = z.object({
   messages: z
     .array(
@@ -221,11 +220,11 @@ async function handleChat(request: Request): Promise<Response> {
   void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
 
   let provider: Provider = (s?.provider ?? "google") as Provider;
-  if (!["google", "openai", "lovable"].includes(provider)) provider = "google";
+if (!["google", "groq", "lovable"].includes(provider)) provider = "google";
 
-  const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
-  const adminOpenAIKey = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"] || "";
-
+const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
+const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || "";
+ 
   let model = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model)
     ? parsed.data.model
     : (s?.model || "").trim();
@@ -242,12 +241,11 @@ async function handleChat(request: Request): Promise<Response> {
     url = "https://ai.gateway.lovable.dev/v1/chat/completions";
     key = process.env["LOVABLE_API_KEY"] || "";
     if (!model) model = isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable;
-  } else if (provider === "openai") {
-    url = "https://api.openai.com/v1/chat/completions";
-    key = adminOpenAIKey;
-    if (!model) model = DEFAULT_MODELS.openai || "gpt-4o";
-  } else {
-    url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  } else if (provider === "groq") {
+  url = "https://api.groq.com/openai/v1/chat/completions";
+  key = adminGroqKey;
+  if (!model) model = DEFAULT_MODELS.groq || "llama-3.3-70b-versatile";    
+  url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
     if (!model || /^gemini-1\.|^gemini-2\./i.test(model)) {
       model = isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
@@ -382,14 +380,14 @@ async function handleChat(request: Request): Promise<Response> {
           label: p.name || "custom-pool",
           isGoogle: false,
         });
-      } else if (p.provider === "openai") {
-        attempts.push({
-          url: "https://api.openai.com/v1/chat/completions",
-          key: pKey,
-          model: p.model?.trim() || "gpt-4o",
-          label: p.name || "openai-pool",
-          isGoogle: false,
-        });
+      } else if (p.provider === "groq") {
+  attempts.push({
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    key: pKey,
+    model: p.model?.trim() || "llama-3.3-70b-versatile",
+    label: p.name || "groq-pool",
+    isGoogle: false,
+  });
       } else {
         attempts.push({
           url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
