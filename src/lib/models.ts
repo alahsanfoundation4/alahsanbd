@@ -17,15 +17,16 @@ export const GOOGLE_MODELS = [
   { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (পেইড কি লাগে)" },
 ];
 
-export const OPENAI_MODELS = [
-  { id: "gpt-5.5", label: "GPT-5.5" },
-  { id: "gpt-4.1", label: "GPT-4.1" },
-  { id: "gpt-4o", label: "GPT-4o" },
+export const GROQ_MODELS = [
+  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (সেরা যুক্তি ও বাংলা মান)" },
+  { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant (অতি দ্রুত গতি)" },
+  { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B (Groq চালিত)" },
 ];
+
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
   lovable: "openai/gpt-6-astra",
   google: "gemini-3.8-flash",
-  openai: "gpt-5.5",
+  groq: "llama-3.3-70b-versatile",
 };
 
