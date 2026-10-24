@@ -1,4 +1,4 @@
-export type Provider = "lovable" | "google" | "openai";
+export type Provider = "lovable" | "google" | "groq";
 
 export const LOVABLE_MODELS = [
   { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (সবচেয়ে শক্তিশালী যুক্তি)" },
