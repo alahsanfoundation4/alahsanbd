@@ -38,7 +38,7 @@ function chatTarget(ctx: Ctx) {
   const provider = ctx.settings?.provider ?? "google";
   const model = ctx.settings?.model ?? "gemini-3.8-flash";
   if (provider === "google") return { url: GOOGLE_CHAT, key: ctx.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"], model, provider };
-  if (provider === "openai") return { url: "https://api.openai.com/v1/chat/completions", key: ctx.keys?.openai_key?.trim(), model, provider };
+  if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", key: ctx.keys?.openai_key?.trim() || process.env["GROQ_API_KEY"], model, provider };
   return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model, provider };
 }
 
