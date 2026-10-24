@@ -241,11 +241,10 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
     url = "https://ai.gateway.lovable.dev/v1/chat/completions";
     key = process.env["LOVABLE_API_KEY"] || "";
     if (!model) model = isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable;
-   } else if (provider === "groq") {
+    } else if (provider === "groq") {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
-    if (!model) model = DEFAULT_MODELS.groq || "llama-3.3-70b-versatile";
-  } else {
+    if (!model || model.startsWith("llama")) model = DEFAULT_MODELS.groq || "qwen/qwen3.8-27b";
   url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
     if (!model || /^gemini-1\.|^gemini-2\./i.test(model)) {
