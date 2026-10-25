@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, normalizeModel, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
 import { buildSearchQuery, FOLLOWUP_SEARCH } from "@/lib/search-query";
 const Body = z.object({
@@ -245,11 +245,11 @@ async function handleChat(request: Request): Promise<Response> {
     provider = "google";
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
-    model = "gemini-3.8-flash";
+    model = "gemini-2.5-flash";
   } else if (provider === "lovable") {
     url = "https://ai.gateway.lovable.dev/v1/chat/completions";
     key = process.env["LOVABLE_API_KEY"] || "";
-    if (!model) model = isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable;
+    if (!model || /gemini-3/i.test(model)) model = isSiteReq ? "google/gemini-2.5-flash" : DEFAULT_MODELS.lovable;
   } else if (provider === "groq") {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
@@ -261,8 +261,8 @@ async function handleChat(request: Request): Promise<Response> {
   } else {
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
-    if (!model || /^gemini-1\.|^gemini-2\./i.test(model)) {
-      model = isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
+    if (!model || /^gemini-3/i.test(model)) {
+      model = isQuick ? "gemini-2.0-flash" : "gemini-2.5-flash";
     }
   }
 
@@ -379,14 +379,14 @@ async function handleChat(request: Request): Promise<Response> {
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
   const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
   const attempts: { url: string; key: string; model: string; label: string; isGoogle: boolean; isOpenRouter?: boolean }[] = [];
-  const addGoogle = (k: string, m: string, label: string) => { if (k) attempts.push({ url: googleUrl, key: k, model: m, label, isGoogle: true }); };
+  const addGoogle = (k: string, m: string, label: string) => { if (k) attempts.push({ url: googleUrl, key: k, model: normalizeModel("google", m), label, isGoogle: true }); };
   const addGroq = (k: string, m: string, label: string) => { if (k) attempts.push({ url: groqUrl, key: k, model: m, label, isGoogle: false }); };
   const addOpenRouter = (k: string, m: string, label: string) => { if (k) attempts.push({ url: openRouterUrl, key: k, model: m, label, isGoogle: false, isOpenRouter: true }); };
 
   if (provider === "google" || isEngineer) {
-    addGoogle(adminGoogleKey, isEngineer ? "gemini-3.8-flash" : (model || (isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash")), "google-primary");
-    addGoogle(adminGoogleKey, "gemini-3-flash-preview", "google-fallback");
-    addGoogle(adminGoogleKey, "gemini-3.5-flash-lite", "google-lite-fallback");
+    addGoogle(adminGoogleKey, isEngineer ? "gemini-2.5-flash" : (model || (isQuick ? "gemini-2.0-flash" : "gemini-2.5-flash")), "google-primary");
+    addGoogle(adminGoogleKey, "gemini-2.0-flash", "google-fallback-2.0");
+    addGoogle(adminGoogleKey, "gemini-1.5-flash", "google-fallback-1.5");
     if (adminGroqKey && adminGroqKey !== adminGoogleKey) {
       addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-cross-fallback");
       addGroq(adminGroqKey, "openai/gpt-oss-20b", "groq-cross-fallback-lite");
@@ -405,8 +405,8 @@ async function handleChat(request: Request): Promise<Response> {
       addOpenRouter(adminOpenRouterKey, "google/gemma-4-31b-it:free", "openrouter-cross-fallback-gemma");
     }
     if (adminGoogleKey && adminGoogleKey !== adminGroqKey) {
-      addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-cross-fallback");
-      addGoogle(adminGoogleKey, "gemini-3.5-flash-lite", "google-cross-fallback-lite");
+      addGoogle(adminGoogleKey, "gemini-2.5-flash", "google-cross-fallback");
+      addGoogle(adminGoogleKey, "gemini-2.0-flash", "google-cross-fallback-2.0");
     }
   } else if (provider === "openrouter") {
     addOpenRouter(adminOpenRouterKey, model || "openrouter/free", "openrouter-primary");
@@ -416,13 +416,13 @@ async function handleChat(request: Request): Promise<Response> {
       addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-cross-fallback");
     }
     if (adminGoogleKey) {
-      addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-cross-fallback");
+      addGoogle(adminGoogleKey, "gemini-2.5-flash", "google-cross-fallback");
     }
   } else {
-    if (process.env["LOVABLE_API_KEY"]) attempts.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model: model || (isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable), label: "lovable-primary", isGoogle: false });
+    if (process.env["LOVABLE_API_KEY"]) attempts.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model: model || (isSiteReq ? "google/gemini-2.5-flash" : DEFAULT_MODELS.lovable), label: "lovable-primary", isGoogle: false });
     addOpenRouter(adminOpenRouterKey, "openrouter/free", "openrouter-fallback");
     addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-fallback");
-    addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-fallback");
+    addGoogle(adminGoogleKey, "gemini-2.5-flash", "google-fallback");
   }
 
   // Pool entries remain supplemental and may be used for their explicitly selected provider.
@@ -435,7 +435,7 @@ async function handleChat(request: Request): Promise<Response> {
     } else if (p.provider === "openrouter") {
       addOpenRouter(pKey, p.model?.trim() || "openrouter/free", p.name || "openrouter-pool");
     }
-    else addGoogle(pKey, p.model?.trim() || "gemini-3.8-flash", p.name || "google-pool");
+    else addGoogle(pKey, p.model?.trim() || "gemini-2.5-flash", p.name || "google-pool");
   }
 
   let finalResponse: Response | null = null;

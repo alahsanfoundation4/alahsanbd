@@ -42,7 +42,13 @@ function AdminPage() {
   useEffect(() => {
     if (!admin) return;
     supabase.from("ai_settings").select("*").eq("id", 1).maybeSingle().then(({ data, error }) => {
-      if (data) return setS(data as unknown as S);
+      if (data) {
+        const loaded = data as unknown as S;
+        if (loaded.provider === "google" && (!loaded.model || /^gemini-3/i.test(loaded.model))) {
+          loaded.model = "gemini-2.5-flash";
+        }
+        return setS(loaded);
+      }
       setStatus(error ? `সেটিংস আনা যায়নি: ${error.message}` : "");
       setS({ admin_note: "", system_prompt: "", provider: "lovable", model: "", hourly_limit: 30, daily_limit: 200, reasoning_effort: "low", welcome_title: "", welcome_subtitle: "", suggestions: "", url_reader: true, site_builder: true, chat_enabled: true });
     });
@@ -76,15 +82,33 @@ function AdminPage() {
     setKeySignals((v) => ({ ...v, [args.id]: { state: "checking" } }));
     try {
       const { data } = await supabase.auth.getSession();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
       const r = await fetch("/api/health", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
         body: JSON.stringify({ action: "test_key", provider: args.provider, key: args.key, model: args.model, base_url: args.base_url }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        let msg = "টেস্ট ব্যর্থ";
+        try {
+          const j = JSON.parse(text);
+          if (j.message) msg = j.message;
+        } catch {
+          if (r.status === 504 || r.status === 524) msg = "সময়সীমা শেষ (Timeout)";
+          else msg = `সার্ভার ত্রুটি (${r.status})`;
+        }
+        setKeySignals((v) => ({ ...v, [args.id]: { state: "error", message: msg } }));
+        return;
+      }
       const result = await r.json();
       setKeySignals((v) => ({ ...v, [args.id]: { state: result.ok ? "ok" : "error", message: result.message || "টেস্ট ব্যর্থ", latencyMs: result.latencyMs } }));
     } catch (e: any) {
-      setKeySignals((v) => ({ ...v, [args.id]: { state: "error", message: e?.message || "টেস্ট ব্যর্থ" } }));
+      const isTimeout = e?.name === "AbortError";
+      setKeySignals((v) => ({ ...v, [args.id]: { state: "error", message: isTimeout ? "সময়সীমা শেষ (Timeout)" : (e?.message || "টেস্ট ব্যর্থ") } }));
     }
   };
 
@@ -181,7 +205,7 @@ function AdminPage() {
           <p className={hint}>শুধু অ্যাডমিন দেখতে পান। প্রাইমারি প্রোভাইডার ব্যর্থ হলে অন্য প্রোভাইডারের কী-ও ফলব্যাক হিসেবে চেষ্টা হবে। সব কী এই প্যানেল থেকে টেস্ট করা যায়।</p>
          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key</label>
          <input type={show ? "text" : "password"} value={gKey} onChange={(e) => { setGKey(e.target.value); setKeySignals((v) => ({ ...v, ["google"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="AQ…" autoComplete="new-password" />
-         <KeySignal id="google" label="Google Gemini" state={keySignals["google"]?.state ?? "idle"} message={keySignals["google"]?.message} latencyMs={keySignals["google"]?.latencyMs} onTest={() => testKey({ id: "google", provider: "google", key: gKey, model: "gemini-3.8-flash" })} disabled={!gKey.trim()} />
+         <KeySignal id="google" label="Google Gemini" state={keySignals["google"]?.state ?? "idle"} message={keySignals["google"]?.message} latencyMs={keySignals["google"]?.latencyMs} onTest={() => testKey({ id: "google", provider: "google", key: gKey, model: "gemini-2.5-flash" })} disabled={!gKey.trim()} />
          <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (gsk_...)</label>
          <input type={show ? "text" : "password"} value={oKey} onChange={(e) => { setOKey(e.target.value); setKeySignals((v) => ({ ...v, ["groq"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="gsk_..." autoComplete="new-password" />
          <KeySignal id="groq" label="Groq" state={keySignals["groq"]?.state ?? "idle"} message={keySignals["groq"]?.message} latencyMs={keySignals["groq"]?.latencyMs} onTest={() => testKey({ id: "groq", provider: "groq", key: oKey, model: "openai/gpt-oss-120b" })} disabled={!oKey.trim()} />
@@ -190,7 +214,7 @@ function AdminPage() {
          <KeySignal id="openrouter" label="OpenRouter" state={keySignals["openrouter"]?.state ?? "idle"} message={keySignals["openrouter"]?.message} latencyMs={keySignals["openrouter"]?.latencyMs} onTest={() => testKey({ id: "openrouter", provider: "openrouter", key: oRKey, model: "openrouter/free" })} disabled={!oRKey.trim()} />
          <label className="mt-3 block text-sm text-muted-foreground">বিল্ট-ইন (Lovable AI Gateway)</label>
          <p className="text-xs text-muted-foreground mt-0.5">সার্ভারের নিজস্ব গেটওয়ে সংযোগ (আলাদা এপিআই কী দিতে হয় না)</p>
-         <KeySignal id="lovable" label="বিল্ট-ইন গেটওয়ে" state={keySignals["lovable"]?.state ?? "idle"} message={keySignals["lovable"]?.message} latencyMs={keySignals["lovable"]?.latencyMs} onTest={() => testKey({ id: "lovable", provider: "lovable", key: "builtin", model: "google/gemini-3.8-flash" })} disabled={false} />
+         <KeySignal id="lovable" label="বিল্ট-ইন গেটওয়ে" state={keySignals["lovable"]?.state ?? "idle"} message={keySignals["lovable"]?.message} latencyMs={keySignals["lovable"]?.latencyMs} onTest={() => testKey({ id: "lovable", provider: "lovable", key: "builtin", model: "openai/gpt-6-astra" })} disabled={false} />
 
         </section>
 

@@ -1,5 +1,5 @@
 import { ActivityHandling, Modality, StartSensitivity, type LiveConnectConfig } from "@google/genai";
-export const GEMINI_LIVE_MODEL = "gemini-3.8-live";
+export const GEMINI_LIVE_MODEL = "gemini-2.0-flash-exp";
 export const geminiLiveConfig: LiveConnectConfig = {
   responseModalities: [Modality.AUDIO],
   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Fenrir" } } },
