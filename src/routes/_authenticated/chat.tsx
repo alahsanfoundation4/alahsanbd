@@ -125,7 +125,7 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
     saveBlob(await Packer.toBlob(d), "al-ahsan-answer.docx");
   } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
 }
-import { LOVABLE_MODELS } from "@/lib/models";
+import { LOVABLE_MODELS, GOOGLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS } from "@/lib/models";
 import { Settings as SettingsIcon, Camera, MonitorUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
@@ -380,7 +380,7 @@ function ChatPage() {
   const [sidebar, setSidebar] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [camOpen, setCamOpen] = useState(false);
-  const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
+  const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string; provider?: string; model?: string }>({});
   const [speaking, setSpeaking] = useState<number | null>(null);
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
   const recRef = useRef<any>(null);
@@ -766,7 +766,12 @@ function ChatPage() {
                 <select value={mode} onChange={(e) => { setMode(e.target.value); localStorage.setItem("ahsan-mode", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">সাধারণ</option>{MODES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
               </label>
               <label className="block text-xs text-muted-foreground">AI মডেল
-                <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"><option value="">স্বয়ংক্রিয় (দ্রুত)</option>{LOVABLE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+                <select value={model} onChange={(e) => { setModel(e.target.value); localStorage.setItem("ahsan-model", e.target.value); }} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground">
+                  <option value="">স্বয়ংক্রিয় (অ্যাডমিন সেটিংস)</option>
+                  {((cfg.provider === "google" ? GOOGLE_MODELS : cfg.provider === "groq" ? GROQ_MODELS : cfg.provider === "openrouter" ? OPENROUTER_MODELS : LOVABLE_MODELS) as Array<{ id: string; label: string }>).map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
               </label>
             </PopoverContent>
           </Popover>

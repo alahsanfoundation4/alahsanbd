@@ -47,19 +47,23 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
 export function normalizeModel(provider: Provider | string, model?: string): string {
   const m = (model || "").trim();
   if (provider === "google") {
-    if (!m || /^gemini-3/i.test(m)) return "gemini-2.5-flash";
+    if (!m || /^gemini-3/i.test(m) || !m.startsWith("gemini-")) return "gemini-2.5-flash";
     return m;
   }
   if (provider === "lovable") {
-    if (!m || /gemini-3/i.test(m)) return "openai/gpt-6-astra";
+    if (!m || /gemini-3/i.test(m) || !LOVABLE_MODELS.some((x) => x.id === m)) return "openai/gpt-6-astra";
     return m;
   }
   if (provider === "groq") {
-    if (!m || m === "qwen/qwen3.8-27b") return "openai/gpt-oss-120b";
+    if (!m || m === "qwen/qwen3.8-27b" || m.startsWith("gemini-") || m.startsWith("google/") || m.includes("astra")) {
+      return "openai/gpt-oss-120b";
+    }
     return m;
   }
   if (provider === "openrouter") {
-    if (!m) return "openrouter/free";
+    if (!m || m.startsWith("gemini-") || m.includes("astra") || m === "openai/gpt-oss-120b") {
+      return "openrouter/free";
+    }
     return m;
   }
   return m || DEFAULT_MODELS.google;
