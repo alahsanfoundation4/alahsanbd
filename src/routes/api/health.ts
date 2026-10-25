@@ -248,7 +248,8 @@ export const Route = createFileRoute("/api/health")({
             } catch (fetchErr: any) {
               // If google openai-compat endpoint timed out or failed, try native endpoint as fallback validation
               if (provider === "google") {
-                const nativeRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(testKey)}`, {
+                const nativeRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+                  headers: { "x-goog-api-key": testKey },
                   signal: AbortSignal.timeout(6000)
                 }).catch(() => null);
                 if (nativeRes && (nativeRes.ok || nativeRes.status === 200)) {
@@ -257,7 +258,7 @@ export const Route = createFileRoute("/api/health")({
                     ok: true,
                     status: 200,
                     latencyMs: Date.now() - t0,
-                    message: "কী সচল ও কার্যকর (Google Native)",
+                    message: "Google key গ্রহণ হয়েছে; Chat endpoint timeout করেছে",
                     provider,
                     model: testModel,
                   }, { headers: { "Cache-Control": "no-store" } });

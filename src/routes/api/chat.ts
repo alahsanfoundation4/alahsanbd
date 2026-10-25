@@ -439,6 +439,7 @@ async function handleChat(request: Request): Promise<Response> {
   }
 
   let finalResponse: Response | null = null;
+  let successfulAttempt: (typeof attempts)[number] | null = null;
   let lastErrorDetail: { status: number; text: string } | null = null;
   const badKeys = new Set<string>();
   const clientAbortController = new AbortController();
@@ -463,7 +464,7 @@ async function handleChat(request: Request): Promise<Response> {
         res = await fetch(attempt.url, { method: "POST", headers, body: JSON.stringify(payload), signal: attemptAbortController.signal });
       }
       clearTimeout(timer);
-      if (res.ok && res.body) { finalResponse = res; break; }
+      if (res.ok && res.body) { finalResponse = res; successfulAttempt = attempt; break; }
       const errorText = (await res.text().catch(() => "")).slice(0, 350);
       lastErrorDetail = { status: res.status, text: errorText };
       if (res.status === 401 || res.status === 403) badKeys.add(attempt.key);
@@ -487,7 +488,13 @@ async function handleChat(request: Request): Promise<Response> {
   }
 
   stages.push("write");
-  return withStages(stages, finalResponse.body, clientAbortController);
+  const actualProvider = successfulAttempt?.isGoogle ? "google"
+    : successfulAttempt?.isOpenRouter ? "openrouter"
+    : successfulAttempt?.label.startsWith("lovable-") ? "lovable"
+    : successfulAttempt?.url.includes("api.groq.com") ? "groq"
+    : successfulAttempt?.label === "custom-pool" ? "custom"
+    : "unknown";
+  return withStages(stages, finalResponse.body, clientAbortController, actualProvider, successfulAttempt?.model);
 }
 
 function friendlyError(status: number, text: string): string {
@@ -508,7 +515,7 @@ function friendlyError(status: number, text: string): string {
   return `উত্তর তৈরি করা যায়নি (কোড: ${status})। অনুগ্রহ করে আবার চেষ্টা করুন।`;
 }
 
-function withStages(stages: string[], upstream: ReadableStream<Uint8Array>, upstreamController?: AbortController): Response {
+function withStages(stages: string[], upstream: ReadableStream<Uint8Array>, upstreamController?: AbortController, actualProvider?: string, actualModel?: string): Response {
   const enc = new TextEncoder();
   const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
   const reader = upstream.getReader();
@@ -554,6 +561,8 @@ function withStages(stages: string[], upstream: ReadableStream<Uint8Array>, upst
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      ...(actualProvider ? { "X-AI-Provider": actualProvider } : {}),
+      ...(actualModel ? { "X-AI-Model": actualModel } : {}),
     },
   });
 }
