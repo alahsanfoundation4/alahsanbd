@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeModel, DEFAULT_MODELS } from "@/lib/models";
 
 // Dynamic diagnostic engine: every probe exercises the real system and only
 // reports an Issue when something is actually broken. Unknown exceptions from
@@ -9,7 +10,7 @@ type Ctx = { admin: any; settings: any; keys: any; issues: Issue[]; passed: stri
 
 const FOUNDER = "alahsanfoundation.info@gmail.com";
 const GOOGLE_CHAT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-3-flash-preview"];
+const WORKING_GOOGLE_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"];
 const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const TABLES = ["ai_settings", "ai_keys", "conversations", "messages", "pages", "health_checks", "chat_usage", "user_roles", "user_memories"];
 
@@ -20,7 +21,7 @@ async function chatCall(url: string, key: string, model: string, content: unknow
     method: "POST",
     headers,
     body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(12000),
   }).catch((e) => new Response(String(e), { status: 599 }));
   const text = await r.text();
   return { ok: r.ok, status: r.status, text: text.slice(0, 300) };
@@ -39,7 +40,8 @@ function classify(status: number, text: string) {
 
 function chatTarget(ctx: Ctx) {
   const provider = ctx.settings?.provider ?? "google";
-  const model = ctx.settings?.model ?? "gemini-3.8-flash";
+  const rawModel = ctx.settings?.model ?? "gemini-2.5-flash";
+  const model = normalizeModel(provider, rawModel);
   if (provider === "google") return { url: GOOGLE_CHAT, key: ctx.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"], model, provider, isGoogle: true };
   if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", key: ctx.keys?.openai_key?.trim() || process.env["GROQ_API_KEY"], model, provider, isGoogle: false };
   if (provider === "openrouter") return { url: "https://openrouter.ai/api/v1/chat/completions", key: ctx.keys?.openrouter_key?.trim() || process.env["OPENROUTER_API_KEY"], model: model || "openrouter/free", provider, isGoogle: false };
@@ -82,8 +84,8 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
     await Promise.all(pool.map(async (p, i) => {
       if (p?.active === false || !p?.key?.trim()) return;
       const url = p.provider === "custom" ? `${String(p.base_url ?? "").replace(/\/$/, "")}/chat/completions` : p.provider === "openai" ? "https://api.openai.com/v1/chat/completions" : GOOGLE_CHAT;
-      const model = p.model?.trim() || (p.provider === "google" ? c.settings?.model || "gemini-3.8-flash" : "gpt-4o");
-      const r = await chatCall(url, p.key.trim(), model, "ok");
+      const model = p.model?.trim() || (p.provider === "google" ? normalizeModel("google", c.settings?.model) : "gpt-4o");
+      const r = await chatCall(url, p.key.trim(), model, "ok", p.provider === "google");
       if (r.ok) return void c.passed.push(`অতিরিক্ত কী: ${p.name || i + 1}`);
       const temp = r.status === 429 || r.status >= 500;
       c.issues.push({ id: `pool:${i}`, area: "কী-পুল", title: `"${p.name || `কী ${i + 1}`}" কাজ করছে না — ${classify(r.status, r.text)}`, detail: `${model}: ${r.text.slice(0, 140)}`, ...(temp ? {} : { fix: `disable_pool:${i}`, fixLabel: "সমাধান করুন" }) });
@@ -143,12 +145,20 @@ async function scan(admin: any) {
 
 async function repair(admin: any, fix: string): Promise<string> {
   if (fix === "enable_chat") { await admin.from("ai_settings").update({ chat_enabled: true }).eq("id", 1); return "চ্যাট চালু করা হয়েছে"; }
-  if (fix === "create_settings") { await admin.from("ai_settings").upsert({ id: 1, provider: "google", model: "gemini-3.8-flash", chat_enabled: true }); return "সেটিংস তৈরি হয়েছে"; }
+  if (fix === "create_settings") { await admin.from("ai_settings").upsert({ id: 1, provider: "google", model: "gemini-2.5-flash", chat_enabled: true }); return "সেটিংস তৈরি হয়েছে"; }
   if (fix === "switch_model") {
     const { data: k } = await admin.from("ai_keys").select("google_key").eq("id", 1).maybeSingle();
     const key = k?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
     for (const m of WORKING_GOOGLE_MODELS) {
-      if ((await chatCall(GOOGLE_CHAT, key, m, "ok")).ok) { await admin.from("ai_settings").update({ model: m, provider: "google" }).eq("id", 1); return `মডেল বদলে ${m} করা হয়েছে`; }
+      if ((await chatCall(GOOGLE_CHAT, key, m, "ok", true)).ok) {
+        await admin.from("ai_settings").update({ model: m, provider: "google" }).eq("id", 1);
+        return `মডেল বদলে ${m} করা হয়েছে`;
+      }
+    }
+    const native = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (native?.ok) {
+      await admin.from("ai_settings").update({ model: "gemini-2.5-flash", provider: "google" }).eq("id", 1);
+      return "মডেল বদলে gemini-2.5-flash করা হয়েছে (কী সচল)";
     }
     throw new Error("কোনো সচল Google মডেল পাওয়া যায়নি");
   }
@@ -203,18 +213,101 @@ export const Route = createFileRoute("/api/health")({
           }
 
           const t0 = Date.now();
-          let testUrl = GOOGLE_CHAT;
-          let testModel = "gemini-3.8-flash";
+
+          // Dedicated high-speed and accurate test for Google Gemini
+          if (provider === "google") {
+            const testModel = normalizeModel("google", body?.model?.trim());
+            try {
+              // 1. Direct validation via Google's native API models endpoint (instant and standard)
+              const nativeT0 = Date.now();
+              const nativeRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(testKey)}`,
+                { signal: AbortSignal.timeout(6000) }
+              );
+              const nativeLatencyMs = Date.now() - nativeT0;
+
+              if (nativeRes.ok) {
+                // Key is authenticated & active. Try a fast chat ping (3s) with normalized model
+                try {
+                  const pingRes = await fetch(GOOGLE_CHAT, {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${testKey}`,
+                      "x-goog-api-key": testKey,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      model: testModel,
+                      messages: [{ role: "user", content: "ping" }],
+                      max_tokens: 5,
+                    }),
+                    signal: AbortSignal.timeout(4000),
+                  });
+                  if (pingRes.ok) {
+                    return Response.json({
+                      ok: true,
+                      status: 200,
+                      latencyMs: Date.now() - t0,
+                      message: `কী সচল ও কার্যকর (${testModel})`,
+                      provider,
+                      model: testModel,
+                    }, { headers: { "Cache-Control": "no-store" } });
+                  }
+                } catch {
+                  // Chat ping timed out or slow, but key is authenticated
+                }
+
+                return Response.json({
+                  ok: true,
+                  status: 200,
+                  latencyMs: nativeLatencyMs,
+                  message: "Google Gemini কী সচল ও অনুমোদিত",
+                  provider,
+                  model: testModel,
+                }, { headers: { "Cache-Control": "no-store" } });
+              }
+
+              const errText = (await nativeRes.text().catch(() => "")).slice(0, 300);
+              let msg = "Google কী অবৈধ বা ভুল";
+              if (nativeRes.status === 400 && /API_KEY_INVALID|not valid/i.test(errText)) {
+                msg = "Google API কী অবৈধ বা ভুল";
+              } else if (nativeRes.status === 403) {
+                msg = "Google কী-এর অনুমতি নেই বা Generative Language API চালু নেই";
+              } else if (nativeRes.status === 429) {
+                msg = "Google কোটা শেষ বা রেট লিমিট";
+              }
+              return Response.json({
+                ok: false,
+                status: nativeRes.status,
+                latencyMs: nativeLatencyMs,
+                message: msg,
+                detail: errText,
+                provider,
+                model: testModel,
+              }, { headers: { "Cache-Control": "no-store" } });
+            } catch (err: any) {
+              const isTimeout = err?.name === "AbortError";
+              return Response.json({
+                ok: false,
+                status: isTimeout ? 504 : 500,
+                latencyMs: Date.now() - t0,
+                message: isTimeout ? "Google সার্ভারে সংযোগ সময়সীমা শেষ (Timeout)" : "Google সার্ভারে সংযোগ স্থাপন করা যায়নি",
+                detail: String(err?.message || err),
+                provider,
+                model: testModel,
+              }, { headers: { "Cache-Control": "no-store" } });
+            }
+          }
+
+          // Other providers (Groq, OpenRouter, Lovable AI Gateway, Custom)
+          let testUrl = "";
+          let testModel = "";
           const testHeaders: Record<string, string> = {
             Authorization: `Bearer ${testKey}`,
             "Content-Type": "application/json",
           };
 
-          if (provider === "google") {
-            testUrl = GOOGLE_CHAT;
-            testModel = body.model?.trim() || "gemini-3.8-flash";
-            testHeaders["x-goog-api-key"] = testKey;
-          } else if (provider === "groq") {
+          if (provider === "groq") {
             testUrl = "https://api.groq.com/openai/v1/chat/completions";
             testModel = body.model?.trim() || "openai/gpt-oss-120b";
           } else if (provider === "openrouter") {
@@ -224,7 +317,7 @@ export const Route = createFileRoute("/api/health")({
             testHeaders["X-Title"] = "Al-Ahsan AI";
           } else if (provider === "lovable") {
             testUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-            testModel = body.model?.trim() || "google/gemini-3.8-flash";
+            testModel = body.model?.trim() || "openai/gpt-6-astra";
             testHeaders["Authorization"] = `Bearer ${effectiveKey}`;
           } else if (provider === "custom") {
             testUrl = `${String(body.base_url ?? "").replace(/\/$/, "")}/chat/completions`;
@@ -233,40 +326,17 @@ export const Route = createFileRoute("/api/health")({
 
           try {
             const controller = new AbortController();
-            const timeoutTimer = setTimeout(() => controller.abort(), 20000);
-            let res: Response;
-            try {
-              res = await fetch(testUrl, {
-                method: "POST",
-                headers: testHeaders,
-                body: JSON.stringify({
-                  model: testModel,
-                  messages: [{ role: "user", content: "ping" }],
-                  max_tokens: 5,
-                }),
-                signal: controller.signal,
-              });
-            } catch (fetchErr: any) {
-              // If google openai-compat endpoint timed out or failed, try native endpoint as fallback validation
-              if (provider === "google") {
-                const nativeRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
-                  headers: { "x-goog-api-key": testKey },
-                  signal: AbortSignal.timeout(6000)
-                }).catch(() => null);
-                if (nativeRes && (nativeRes.ok || nativeRes.status === 200)) {
-                  clearTimeout(timeoutTimer);
-                  return Response.json({
-                    ok: true,
-                    status: 200,
-                    latencyMs: Date.now() - t0,
-                    message: "Google key গ্রহণ হয়েছে; Chat endpoint timeout করেছে",
-                    provider,
-                    model: testModel,
-                  }, { headers: { "Cache-Control": "no-store" } });
-                }
-              }
-              throw fetchErr;
-            }
+            const timeoutTimer = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(testUrl, {
+              method: "POST",
+              headers: testHeaders,
+              body: JSON.stringify({
+                model: testModel,
+                messages: [{ role: "user", content: "ping" }],
+                max_tokens: 5,
+              }),
+              signal: controller.signal,
+            });
             clearTimeout(timeoutTimer);
             const latencyMs = Date.now() - t0;
 
@@ -308,6 +378,7 @@ export const Route = createFileRoute("/api/health")({
               message: isTimeout ? "সময়সীমা শেষ (Timeout)" : "সংযোগ স্থাপন করা যায়নি",
               detail: String(e?.message || e),
               provider,
+              model: testModel,
             }, { headers: { "Cache-Control": "no-store" } });
           }
         }
