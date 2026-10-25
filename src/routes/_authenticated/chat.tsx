@@ -147,7 +147,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean };
+type Msg = { role: "user" | "assistant"; content: string; image?: string; images?: string[]; error?: boolean; provider?: string; model?: string };
 const MODES = [
  { id: "study", label: "পড়াশোনা", hint: "শিক্ষকের মতো ধাপে ধাপে সহজ ভাষায় বোঝাও, উদাহরণ দাও, শেষে ৩টি ছোট অনুশীলন প্রশ্ন দাও।" },
   { id: "write", label: "লেখালেখি", hint: "দক্ষ লেখক ও সম্পাদকের মতো সুন্দর, সাবলীল, নির্ভুল ভাষায় লেখো; প্রয়োজনে শিরোনাম ও অনুচ্ছেদ সাজাও।" },
@@ -545,6 +545,9 @@ function ChatPage() {
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) { const detail = await res.text(); const message = /[\u0980-\u09ff]/.test(detail) ? detail.slice(0, 1200) : serviceError(res.status, detail); toast.error(message); throw new Error(message); }
+      const actualProvider = res.headers.get("X-AI-Provider") || undefined;
+      const actualModel = res.headers.get("X-AI-Model") || undefined;
+      if (actualProvider) setMsgs((m) => [...m.slice(0, -1), { ...m[m.length - 1]!, provider: actualProvider, ...(actualModel ? { model: actualModel } : {}) }]);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
@@ -822,6 +825,7 @@ function ChatPage() {
                         return (
                         <>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={streamingNow ? mdStreaming : mdDone}>{body}</ReactMarkdown>
+                          {!streamingNow && m.provider && <div className="mt-1 text-[11px] text-muted-foreground">প্রোভাইডার: {({ google: "Google", groq: "Groq", openrouter: "OpenRouter", lovable: "Built-in", custom: "Custom" } as Record<string, string>)[m.provider] || m.provider}{m.model ? ` · ${m.model}` : ""}</div>}
                           <div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
                             <button onClick={() => copy(body, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
                             <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
