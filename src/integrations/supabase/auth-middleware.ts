@@ -3,9 +3,7 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
-
-
-
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_PUBLISHABLE_KEY } from './client'
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -33,9 +31,8 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   async ({ next }) => {
-    
-    const SUPABASE_URL = process.env['SUPABASE_URL'];
-    const SUPABASE_PUBLISHABLE_KEY = process.env['SUPABASE_PUBLISHABLE_KEY'];
+    const SUPABASE_URL = process.env['SUPABASE_URL'] || DEFAULT_SUPABASE_URL;
+    const SUPABASE_PUBLISHABLE_KEY = process.env['SUPABASE_PUBLISHABLE_KEY'] || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       const missing = [
@@ -52,7 +49,6 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     if (!request?.headers) {
       throw new Error('Unauthorized: No request headers available');
     }
-
 
     const authHeader = request.headers.get('authorization');
 
@@ -74,11 +70,11 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     }
 
     const supabase = createClient<Database>(
-      SUPABASE_URL!,
-      SUPABASE_PUBLISHABLE_KEY!,
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY,
       {
         global: {
-          fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY!),
+          fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
           headers: {
             Authorization: `Bearer ${token}`,
           },

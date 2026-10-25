@@ -1,3 +1,4 @@
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeModel, DEFAULT_MODELS } from "@/lib/models";
@@ -196,11 +197,19 @@ export const Route = createFileRoute("/api/health")({
       POST: async ({ request }) => {
         const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
-        const pub = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, { auth: { persistSession: false, autoRefreshToken: false } });
+        const supabaseUrl = process.env["SUPABASE_URL"] || DEFAULT_SUPABASE_URL;
+        const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+        const pub = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
         const { data: u, error: ue } = await pub.auth.getUser(token);
         if (ue || !u.user) return new Response("Unauthorized", { status: 401 });
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: isAdmin } = await supabaseAdmin.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
+        let isAdmin = false;
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { data } = await supabaseAdmin.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
+          isAdmin = !!data;
+        } catch (adminErr) {
+          console.warn("[health] Admin check error:", adminErr);
+        }
         if (!isAdmin) return new Response("শুধু অ্যাডমিন", { status: 403 });
 
         const body = await request.json().catch(() => ({}));

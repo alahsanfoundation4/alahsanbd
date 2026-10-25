@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -39,9 +39,19 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
+  const [showDetails, setShowDetails] = useState(false);
+
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  const handleClearCacheAndReload = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = "/";
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -68,7 +78,31 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           >
             মূল পাতায় ফিরুন
           </a>
+          <button
+            type="button"
+            onClick={handleClearCacheAndReload}
+            className="inline-flex items-center justify-center rounded-md border border-input bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            ক্যাশ রিসেট ও রিলোড
+          </button>
         </div>
+
+        {error && (
+          <div className="mt-6 text-left">
+            <button
+              type="button"
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-xs text-muted-foreground hover:underline"
+            >
+              {showDetails ? "ত্রুটির বিবরণ লুকান ▲" : "ত্রুটির বিবরণ দেখুন ▼"}
+            </button>
+            {showDetails && (
+              <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted/80 p-2 text-xs text-muted-foreground font-mono whitespace-pre-wrap break-all">
+                {error instanceof Error ? error.message : String(error)}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
