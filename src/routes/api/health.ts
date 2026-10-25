@@ -180,6 +180,96 @@ export const Route = createFileRoute("/api/health")({
         if (!isAdmin) return new Response("শুধু অ্যাডমিন", { status: 403 });
 
         const body = await request.json().catch(() => ({}));
+
+        if (body?.action === "test_key") {
+          const testKey = typeof body?.key === "string" ? body.key.trim() : "";
+          const provider = (body?.provider || "google") as string;
+          if (!["google", "groq", "custom"].includes(provider)) {
+            return Response.json({ ok: false, status: 400, latencyMs: 0, message: "অজানা প্রোভাইডার" });
+          }
+          if (provider === "custom" && (!String(body?.base_url ?? "").startsWith("https://") || !String(body?.base_url ?? "").includes("."))) {
+            return Response.json({ ok: false, status: 400, latencyMs: 0, message: "HTTPS-সহ বৈধ সার্ভার ঠিকানা দিন" });
+          }
+          if (!testKey) {
+            return Response.json({ ok: false, status: 400, latencyMs: 0, message: "এপিআই কী দেওয়া হয়নি" }, { headers: { "Cache-Control": "no-store" } });
+          }
+
+          const t0 = Date.now();
+          let testUrl = GOOGLE_CHAT;
+          let testModel = "gemini-3.8-flash";
+          const testHeaders: Record<string, string> = {
+            Authorization: `Bearer ${testKey}`,
+            "Content-Type": "application/json",
+          };
+
+          if (provider === "google") {
+            testUrl = GOOGLE_CHAT;
+            testModel = body.model?.trim() || "gemini-3.8-flash";
+            testHeaders["x-goog-api-key"] = testKey;
+          } else if (provider === "groq") {
+            testUrl = "https://api.groq.com/openai/v1/chat/completions";
+            testModel = body.model?.trim() || "openai/gpt-oss-120b";
+          } else if (provider === "custom") {
+            testUrl = `${String(body.base_url ?? "").replace(/\/$/, "")}/chat/completions`;
+            testModel = body.model?.trim() || "gpt-4o";
+          }
+
+          try {
+            const controller = new AbortController();
+            const timeoutTimer = setTimeout(() => controller.abort(), 12000);
+            const res = await fetch(testUrl, {
+              method: "POST",
+              headers: testHeaders,
+              body: JSON.stringify({
+                model: testModel,
+                messages: [{ role: "user", content: "ping" }],
+                max_tokens: 5,
+              }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutTimer);
+            const latencyMs = Date.now() - t0;
+
+            if (res.ok) {
+              return Response.json({
+                ok: true,
+                status: res.status,
+                latencyMs,
+                message: "কী সচল ও কার্যকর",
+                provider,
+                model: testModel,
+              }, { headers: { "Cache-Control": "no-store" } });
+            }
+
+            const errText = (await res.text().catch(() => "")).slice(0, 300);
+            let msg = classify(res.status, errText);
+            if (res.status === 401 || res.status === 403) {
+              msg = "কী মেয়াদোত্তীর্ণ বা অনুমতি নেই";
+            } else if (res.status === 429) {
+              msg = "কোটা শেষ বা রেট লিমিট";
+            }
+            return Response.json({
+              ok: false,
+              status: res.status,
+              latencyMs,
+              message: msg,
+              detail: errText,
+              provider,
+              model: testModel,
+            }, { headers: { "Cache-Control": "no-store" } });
+          } catch (e: any) {
+            const isTimeout = e?.name === "AbortError";
+            return Response.json({
+              ok: false,
+              status: isTimeout ? 504 : 500,
+              latencyMs: Date.now() - t0,
+              message: isTimeout ? "সময়সীমা শেষ (Timeout)" : "সংযোগ স্থাপন করা যায়নি",
+              detail: String(e?.message || e),
+              provider,
+            }, { headers: { "Cache-Control": "no-store" } });
+          }
+        }
+
         let repaired: { ok: boolean; message: string } | undefined;
         if (typeof body?.fix === "string") {
           try { repaired = { ok: true, message: await repair(supabaseAdmin, body.fix) }; }

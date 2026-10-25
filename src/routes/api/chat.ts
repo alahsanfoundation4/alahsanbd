@@ -111,8 +111,8 @@ let cachedKeys: { data: any; time: number } | null = null;
 
 async function getCachedSettingsAndKeys(supabaseAdmin: any) {
   const now = Date.now();
-  const needSettings = !cachedSettings || now - cachedSettings.time > 60_000;
-  const needKeys = !cachedKeys || now - cachedKeys.time > 60_000;
+  const needSettings = !cachedSettings || now - cachedSettings.time > 10_000;
+  const needKeys = !cachedKeys || now - cachedKeys.time > 10_000;
 
   try {
     const [sRes, kRes] = await Promise.all([
@@ -220,15 +220,15 @@ async function handleChat(request: Request): Promise<Response> {
   void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
 
   let provider: Provider = (s?.provider ?? "google") as Provider;
-if (!["google", "groq", "lovable"].includes(provider)) provider = "google";
+  if (!["google", "groq", "lovable"].includes(provider)) provider = "google";
+  const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
+  const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || "";
+  if (provider === "google" && !adminGoogleKey && adminGroqKey) provider = "groq";
+  else if (provider === "groq" && !adminGroqKey && adminGoogleKey) provider = "google";
 
-const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
-const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || "";
- 
   let model = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model)
     ? parsed.data.model
     : (s?.model || "").trim();
-
   let url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   let key = adminGoogleKey;
 
@@ -241,7 +241,7 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
     url = "https://ai.gateway.lovable.dev/v1/chat/completions";
     key = process.env["LOVABLE_API_KEY"] || "";
     if (!model) model = isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable;
-      } else if (provider === "groq") {
+  } else if (provider === "groq") {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
     if (!model || model === "qwen/qwen3.8-27b") model = DEFAULT_MODELS.groq || "openai/gpt-oss-120b";
@@ -290,6 +290,17 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
   if (parsed.data.messages.some((_, i) => imgsOf(i).length)) {
     system += "\n\nব্যবহারকারী ছবি বা স্ক্রিনশট সংযুক্ত করেছেন। ছবি নিখুঁতভাবে পর্যবেক্ষণ করে বিস্তারিত পাঠোদ্ধার (OCR), কোড অ্যানালাইসিস এবং প্রযোজ্য ক্ষেত্রে ডিজাইনের তথ্য হুবহু গ্রহণ করো।";
   }
+
+  const rawEffort = (s?.reasoning_effort || "low").toLowerCase().trim();
+  const reasoningEffort = ["low", "medium", "high", "xhigh"].includes(rawEffort) ? rawEffort : "low";
+  const apiReasoningEffort = reasoningEffort === "xhigh" ? "high" : reasoningEffort;
+  const effortInstructions: Record<string, string> = {
+    low: "\n\n=== চিন্তার গভীরতা: কম ===\nদ্রুত, সরাসরি ও সংক্ষিপ্তভাবে মূল উত্তর দিন।",
+    medium: "\n\n=== চিন্তার গভীরতা: মাঝারি ===\nভারসাম্যপূর্ণ যুক্তি ও প্রয়োজনীয় বিবরণসহ উত্তর দিন।",
+    high: "\n\n=== চিন্তার গভীরতা: বেশি ===\nগভীরভাবে বিষয়টি পর্যালোচনা করে বিস্তারিত উত্তর দিন।",
+    xhigh: "\n\n=== চিন্তার গভীরতা: সর্বোচ্চ ===\nবিষয়টি সর্বোচ্চ গভীরতায় বিশ্লেষণ করে পূর্ণাঙ্গ উত্তর দিন।",
+  };
+  system += effortInstructions[reasoningEffort] || effortInstructions["low"];
 
   system += INTEGRITY;
 
@@ -340,83 +351,53 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
 
   const max_tokens = isSiteReq ? 32768 : isCode || isEngineer ? 16384 : 4096;
 
-  // লেটেন্সি ম্যাজিক: 'minimal' দিলে গুগল ২০-৩০ সেকেন্ডের লুকানো চিন্তা বন্ধ করে সরাসরি ৪-৫ সেকেন্ডে আউটপুট দেওয়া শুরু করে
   const requestBody: Record<string, unknown> = {
-    model,
-    stream: true,
-    max_tokens,
+    model, stream: true, max_tokens,
     messages: [{ role: "system", content: system }, ...msgs],
   };
-
-  if (url.includes("generativelanguage") || model.includes("astra") || model.includes("gpt-5")) {
-    requestBody["reasoning_effort"] = "minimal";
+  if (model.includes("astra") || model.includes("gpt-5") || model.includes("o1") || model.includes("o3") || model.includes("thinking")) {
+    requestBody["reasoning_effort"] = apiReasoningEffort;
   }
 
   type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
   const pool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
-    .filter((p) => p && p.active !== false && p.key?.trim())
-    .slice(0, 2);
-
+    .filter((p) => p && p.active !== false && p.key?.trim()).slice(0, 2);
+  const googleUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
   const attempts: { url: string; key: string; model: string; label: string; isGoogle: boolean }[] = [];
+  const addGoogle = (k: string, m: string, label: string) => { if (k) attempts.push({ url: googleUrl, key: k, model: m, label, isGoogle: true }); };
+  const addGroq = (k: string, m: string, label: string) => { if (k) attempts.push({ url: groqUrl, key: k, model: m, label, isGoogle: false }); };
 
-  if (key) {
-    attempts.push({ url, key, model, label: "primary", isGoogle: url.includes("generativelanguage") });
-  }
-
-  if (isEngineer) {
-    if (key) {
-      attempts.push({ url, key, model: "gemini-3-flash-preview", label: "engineer-stepdown-1", isGoogle: true });
-      attempts.push({ url, key, model: "gemini-3.5-flash-lite", label: "engineer-stepdown-2", isGoogle: true });
+  if (provider === "google" || isEngineer) {
+    addGoogle(adminGoogleKey, isEngineer ? "gemini-3.8-flash" : (model || (isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash")), "google-primary");
+    addGoogle(adminGoogleKey, "gemini-3-flash-preview", "google-fallback");
+    addGoogle(adminGoogleKey, "gemini-3.5-flash-lite", "google-lite-fallback");
+    if (adminGroqKey && adminGroqKey !== adminGoogleKey) {
+      addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-cross-fallback");
+      addGroq(adminGroqKey, "openai/gpt-oss-20b", "groq-cross-fallback-lite");
+      addGroq(adminGroqKey, "llama-3.3-70b-versatile", "groq-cross-fallback-llama");
+    }
+  } else if (provider === "groq") {
+    addGroq(adminGroqKey, model || "openai/gpt-oss-120b", "groq-primary");
+    addGroq(adminGroqKey, "openai/gpt-oss-20b", "groq-fallback");
+    addGroq(adminGroqKey, "llama-3.3-70b-versatile", "groq-llama-fallback");
+    if (adminGoogleKey && adminGoogleKey !== adminGroqKey) {
+      addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-cross-fallback");
+      addGoogle(adminGoogleKey, "gemini-3.5-flash-lite", "google-cross-fallback-lite");
     }
   } else {
-    for (const p of pool) {
-      const pKey = p.key!.trim();
-      if (pKey === key) continue;
+    if (process.env["LOVABLE_API_KEY"]) attempts.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model: model || (isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable), label: "lovable-primary", isGoogle: false });
+    addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-fallback");
+    addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-fallback");
+  }
 
-      if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
-        attempts.push({
-          url: p.base_url.replace(/\/$/, "") + "/chat/completions",
-          key: pKey,
-          model: p.model?.trim() || model,
-          label: p.name || "custom-pool",
-          isGoogle: false,
-        });
-      } else if (p.provider === "groq") {
-  attempts.push({
-    url: "https://api.groq.com/openai/v1/chat/completions",
-    key: pKey,
-    model: p.model?.trim() || "llama-3.3-70b-versatile",
-    label: p.name || "groq-pool",
-    isGoogle: false,
-  });
-      } else {
-        attempts.push({
-          url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-          key: pKey,
-          model: p.model?.trim() || model,
-          label: p.name || "google-pool",
-          isGoogle: true,
-        });
-      }
-    }
-
-        if (url.includes("groq.com") && key) {
-      const altGroq = model === "openai/gpt-oss-120b" ? "openai/gpt-oss-20b" : "openai/gpt-oss-120b";
-      attempts.push({ url, key, model: altGroq, label: "groq-stepdown", isGoogle: false });
-    }
-    if (url.includes("generativelanguage") && key) {
-      attempts.push({ url, key, model: "gemini-3-flash-preview", label: "google-flash-fallback", isGoogle: true });
-    }
-
-    if (provider === "lovable" && process.env["LOVABLE_API_KEY"]) {
-      attempts.push({
-        url: "https://ai.gateway.lovable.dev/v1/chat/completions",
-        key: process.env["LOVABLE_API_KEY"],
-        model: isSiteReq ? "google/gemini-3.8-flash" : "google/gemini-3-flash-preview",
-        label: "lovable-gateway-fallback",
-        isGoogle: false,
-      });
-    }
+  // Pool entries remain supplemental and may be used for their explicitly selected provider.
+  for (const p of pool) {
+    const pKey = p.key!.trim();
+    if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
+      attempts.push({ url: p.base_url.replace(/\/$/, "") + "/chat/completions", key: pKey, model: p.model?.trim() || model, label: p.name || "custom-pool", isGoogle: false });
+    } else if (p.provider === "groq") addGroq(pKey, p.model?.trim() || "openai/gpt-oss-120b", p.name || "groq-pool");
+    else addGoogle(pKey, p.model?.trim() || "gemini-3.8-flash", p.name || "google-pool");
   }
 
   let finalResponse: Response | null = null;
@@ -424,44 +405,27 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
   const badKeys = new Set<string>();
   const clientAbortController = new AbortController();
 
-  for (let i = 0; i < attempts.length; i++) {
-    const attempt = attempts[i]!;
+  for (const attempt of attempts) {
     if (badKeys.has(attempt.key)) continue;
-
-    // টাইমআউট সীমা: সাধারণ প্রশ্নে ৬ সে., ইঞ্জিনিয়ারিং বা বড় কোডে ১৮ সে.
     const timeoutLimit = isQuick ? 25000 : 45000;
     const attemptAbortController = new AbortController();
     const timer = setTimeout(() => attemptAbortController.abort(), timeoutLimit);
-
     try {
-      const payload = { ...requestBody, model: attempt.model };
-      if (!attempt.isGoogle && !attempt.model.includes("astra") && !attempt.model.includes("gpt-5")) {
+      const payload: Record<string, unknown> = { ...requestBody, model: attempt.model };
+      if (!attempt.model.includes("astra") && !attempt.model.includes("gpt-5") && !attempt.model.includes("o1") && !attempt.model.includes("o3")) delete payload["reasoning_effort"];
+      const headers: Record<string, string> = { Authorization: `Bearer ${attempt.key}`, "Content-Type": "application/json" };
+      if (attempt.isGoogle) headers["x-goog-api-key"] = attempt.key;
+      let res = await fetch(attempt.url, { method: "POST", headers, body: JSON.stringify(payload), signal: attemptAbortController.signal });
+      if (res.status === 400 && payload["reasoning_effort"]) {
         delete payload["reasoning_effort"];
+        res = await fetch(attempt.url, { method: "POST", headers, body: JSON.stringify(payload), signal: attemptAbortController.signal });
       }
-
-      const res = await fetch(attempt.url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${attempt.key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: attemptAbortController.signal,
-      });
-
       clearTimeout(timer);
-
-      if (res.ok && res.body) {
-        finalResponse = res;
-        break;
-      }
-
+      if (res.ok && res.body) { finalResponse = res; break; }
       const errorText = (await res.text().catch(() => "")).slice(0, 350);
       lastErrorDetail = { status: res.status, text: errorText };
-
-      if (res.status === 401 || res.status === 403) {
-        badKeys.add(attempt.key);
-      } else if (res.status === 429) {
+      if (res.status === 401 || res.status === 403) badKeys.add(attempt.key);
+      else if (res.status === 429) {
         const retryAfter = res.headers.get("retry-after");
         const waitMs = retryAfter ? Math.min(2000, Math.max(200, Number(retryAfter) * 1000)) : 250 + Math.random() * 200;
         await new Promise((r) => setTimeout(r, waitMs));
