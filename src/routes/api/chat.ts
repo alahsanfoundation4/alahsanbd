@@ -1,3 +1,4 @@
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -133,8 +134,8 @@ async function handleChat(request: Request): Promise<Response> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return new Response("Unauthorized", { status: 401 });
 
-  const supabaseUrl = process.env["SUPABASE_URL"];
-  const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+  const supabaseUrl = process.env["SUPABASE_URL"] || DEFAULT_SUPABASE_URL;
+  const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
   if (!supabaseUrl || !supabaseKey) {
     return new Response("Supabase credentials missing", { status: 500 });
   }

@@ -39,20 +39,24 @@ function Index() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/chat" });
+      if (data?.session) navigate({ to: "/chat" });
+    }).catch((e) => {
+      console.warn("[index] Session fetch error:", e);
     });
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_IN" && s) navigate({ to: "/chat" });
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      data?.subscription?.unsubscribe();
+    };
   }, [navigate]);
 
   const google = async () => {
     setBusy(true); setErr("");
     try {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (r.error) { setErr("Google লগইন ব্যর্থ হয়েছে।"); setBusy(false); return; }
-    if (!r.redirected) navigate({ to: "/chat" });
+      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (r.error) { setErr("Google লগইন ব্যর্থ হয়েছে।"); setBusy(false); return; }
+      if (!r.redirected) navigate({ to: "/chat" });
     } catch (error) { setErr(authError(error)); } finally { setBusy(false); }
   };
 
@@ -60,17 +64,17 @@ function Index() {
     e.preventDefault();
     setBusy(true); setErr(""); setInfo("");
     try {
-    if (mode === "in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-      setBusy(false);
-      if (error) setErr(authError(error));
-      else navigate({ to: "/chat" });
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin } });
-      setBusy(false);
-      if (error) setErr(authError(error));
-      else setInfo("আপনার ইমেইলে একটি নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে ক্লিক করে তারপর লগইন করুন।");
-    }
+      if (mode === "in") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+        setBusy(false);
+        if (error) setErr(authError(error));
+        else navigate({ to: "/chat" });
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin } });
+        setBusy(false);
+        if (error) setErr(authError(error));
+        else setInfo("আপনার ইমেইলে একটি নিশ্চিতকরণ লিংক পাঠানো হয়েছে। লিংকে ক্লিক করে তারপর লগইন করুন।");
+      }
     } catch (error) { setErr(authError(error)); } finally { setBusy(false); }
   };
 

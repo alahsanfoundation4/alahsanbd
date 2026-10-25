@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 
 const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("extract"), user: z.string().max(4000), assistant: z.string().max(4000) }),
@@ -15,7 +16,9 @@ export const Route = createFileRoute("/api/memory")({
       POST: async ({ request }) => {
         const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
-        const pub = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
+        const supabaseUrl = process.env["SUPABASE_URL"] || DEFAULT_SUPABASE_URL;
+        const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+        const pub = createClient(supabaseUrl, supabaseKey, {
           auth: { persistSession: false, autoRefreshToken: false },
         });
         const { data: u, error: ue } = await pub.auth.getUser(token);

@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
 
+export const DEFAULT_SUPABASE_URL = "https://c--4e9a5c82-349f-42ed-b939-6c621c23126e-prod.lovable.cloud";
+export const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_AT-wR43_1WdeuljfZKNqqQ_JwfIaij7";
+export const DEFAULT_SUPABASE_PROJECT_ID = "bnhhodvylhfhzhkghkaa";
+
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
@@ -10,8 +14,8 @@ function isNewSupabaseApiKey(value: string): boolean {
 // The public URL can be reachable only from the browser, so server requests go to the runtime URL of the same backend.
 function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | undefined {
   if (typeof window !== 'undefined' || typeof process === 'undefined') return undefined;
-  const serverUrl = process.env['SUPABASE_URL']?.replace(/\/+$/, '');
-  if (!serverUrl || serverUrl === publicUrl || process.env['SUPABASE_PUBLISHABLE_KEY'] !== supabaseKey) return undefined;
+  const serverUrl = (process.env?.['SUPABASE_URL'] || DEFAULT_SUPABASE_URL)?.replace(/\/+$/, '');
+  if (!serverUrl || serverUrl === publicUrl || (process.env?.['SUPABASE_PUBLISHABLE_KEY'] || DEFAULT_SUPABASE_PUBLISHABLE_KEY) !== supabaseKey) return undefined;
   return serverUrl;
 }
 
@@ -45,22 +49,22 @@ function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof f
   };
 }
 
+export function getResolvedSupabaseConfig() {
+  const clientUrl =
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env['VITE_SUPABASE_URL'] : undefined) ||
+    (typeof process !== 'undefined' && process.env ? process.env['SUPABASE_URL'] : undefined);
+  const clientKey =
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] : undefined) ||
+    (typeof process !== 'undefined' && process.env ? process.env['SUPABASE_PUBLISHABLE_KEY'] : undefined);
+
+  return {
+    url: clientUrl || DEFAULT_SUPABASE_URL,
+    key: clientKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+  };
+}
 
 function createSupabaseClient() {
-  // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'];
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
-
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY ? ['SUPABASE_PUBLISHABLE_KEY'] : []),
-    ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
-    console.error(`[Supabase] ${message}`);
-    throw new Error(message);
-  }
+  const { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY } = getResolvedSupabaseConfig();
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
@@ -84,4 +88,3 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
     return Reflect.get(_supabase, prop, receiver);
   },
 });
-

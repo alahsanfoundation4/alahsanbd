@@ -34,7 +34,9 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/chat" });
+      if (data?.user) navigate({ to: "/chat" });
+    }).catch((e) => {
+      console.warn("[auth] User fetch error:", e);
     });
   }, [navigate]);
 
@@ -43,22 +45,22 @@ function AuthPage() {
     if (busy) return;
     setBusy(true);
     try {
-    if (mode === "in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) { toast.error(authError(error)); return; }
-      navigate({ to: "/chat" });
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      setBusy(false);
-      if (error) { toast.error(authError(error)); return; }
-      setLinkKind("signup");
-      setSent(true);
-    }
+      if (mode === "in") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        setBusy(false);
+        if (error) { toast.error(authError(error)); return; }
+        navigate({ to: "/chat" });
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        setBusy(false);
+        if (error) { toast.error(authError(error)); return; }
+        setLinkKind("signup");
+        setSent(true);
+      }
     } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
@@ -67,13 +69,13 @@ function AuthPage() {
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
     setBusy(true);
     try {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
-    });
-    setBusy(false);
-    if (error) toast.error(authError(error));
-    else { setLinkKind("magic"); setSent(true); toast.success("লগইন লিংক আপনার ইমেইলে পাঠানো হয়েছে।"); }
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+      });
+      setBusy(false);
+      if (error) toast.error(authError(error));
+      else { setLinkKind("magic"); setSent(true); toast.success("লগইন লিংক আপনার ইমেইলে পাঠানো হয়েছে।"); }
     } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
@@ -82,13 +84,13 @@ function AuthPage() {
     if (linkKind === "magic") return magicLink();
     setBusy(true);
     try {
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    if (error) toast.error(authError(error));
-    else toast.success("লিংক আবার পাঠানো হয়েছে।");
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) toast.error(authError(error));
+      else toast.success("লিংক আবার পাঠানো হয়েছে।");
     } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
@@ -97,11 +99,11 @@ function AuthPage() {
     if (!email) { toast.error("আগে উপরে আপনার ইমেইল লিখুন।"); return; }
     setBusy(true);
     try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) toast.error(authError(error));
-    else toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে।");
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) toast.error(authError(error));
+      else toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে।");
     } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
@@ -109,9 +111,9 @@ function AuthPage() {
     if (busy) return;
     setBusy(true);
     try {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (r.error) toast.error("Google লগইন ব্যর্থ হয়েছে।");
-    else if (!r.redirected) navigate({ to: "/chat" });
+      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (r.error) toast.error("Google লগইন ব্যর্থ হয়েছে।");
+      else if (!r.redirected) navigate({ to: "/chat" });
     } catch (error) { toast.error(authError(error)); } finally { setBusy(false); }
   }
 
