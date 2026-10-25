@@ -202,11 +202,20 @@ export const Route = createFileRoute("/api/health")({
         const pub = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
         const { data: u, error: ue } = await pub.auth.getUser(token);
         if (ue || !u.user) return new Response("Unauthorized", { status: 401 });
+        let supabaseAdmin: any = null;
+        try {
+          const mod = await import("@/integrations/supabase/client.server");
+          supabaseAdmin = mod.supabaseAdmin;
+        } catch (adminLoadErr) {
+          console.warn("[health] Admin client load error:", adminLoadErr);
+        }
+
         let isAdmin = false;
         try {
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { data } = await supabaseAdmin.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
-          isAdmin = !!data;
+          if (supabaseAdmin) {
+            const { data } = await supabaseAdmin.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
+            isAdmin = !!data;
+          }
         } catch (adminErr) {
           console.warn("[health] Admin check error:", adminErr);
         }
@@ -448,13 +457,32 @@ export const Route = createFileRoute("/api/health")({
         }
 
         let repaired: { ok: boolean; message: string } | undefined;
-        if (typeof body?.fix === "string") {
+        if (typeof body?.fix === "string" && supabaseAdmin) {
           try { repaired = { ok: true, message: await repair(supabaseAdmin, body.fix) }; }
           catch (e) { repaired = { ok: false, message: e instanceof Error ? e.message : String(e) }; }
         }
-        const results = { ...(await scan(supabaseAdmin)), repaired };
-        await supabaseAdmin.from("health_checks").insert({ results });
-        return Response.json(results);
+        try {
+          if (!supabaseAdmin) {
+            return Response.json({
+              issues: [{ id: "db:admin", area: "ডাটাবেস", title: "অ্যাডমিন কানেকশন লোড করা যায়নি", detail: "সার্ভারে SUPABASE_SERVICE_ROLE_KEY অনুপস্থিত" }],
+              passed: [],
+              at: new Date().toISOString(),
+              repaired,
+            });
+          }
+          const scanResults = await scan(supabaseAdmin);
+          const results = { ...scanResults, repaired };
+          await supabaseAdmin.from("health_checks").insert({ results }).catch(() => {});
+          return Response.json(results);
+        } catch (scanErr: any) {
+          console.error("[health] Scan error:", scanErr);
+          return Response.json({
+            issues: [{ id: "scan:error", area: "সিস্টেম", title: "স্ক্যান চলাকালীন ত্রুটি হয়েছে", detail: scanErr instanceof Error ? scanErr.message : String(scanErr) }],
+            passed: [],
+            at: new Date().toISOString(),
+            repaired,
+          });
+        }
       },
     },
   },

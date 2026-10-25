@@ -121,14 +121,6 @@ function AdminPage() {
 
   const save = async () => {
     setStatus("সংরক্ষণ হচ্ছে…");
-    const r1 = await supabase.from("ai_settings").upsert({
-      ...s,
-      id: 1,
-      hourly_limit: Math.max(1, s.hourly_limit || 1),
-      daily_limit: Math.max(1, s.daily_limit || 1),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "id" });
-
     const userPool = pool
       .filter((p) => p.key.trim() && p.name !== "_openrouter_primary")
       .map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }));
@@ -149,12 +141,49 @@ function AdminPage() {
       });
     }
 
-    let r2 = await supabase.from("ai_keys").upsert({
+    const settingsPayload = {
+      ...s,
       id: 1,
+      hourly_limit: Math.max(1, s.hourly_limit || 1),
+      daily_limit: Math.max(1, s.daily_limit || 1),
+      updated_at: new Date().toISOString(),
+    };
+
+    const keysPayload = {
       google_key: gKey.trim(),
       openai_key: oKey.trim(),
       openrouter_key: oRKey.trim(),
       key_pool: enrichedPool,
+    };
+
+    // First attempt: secure admin API route using service role
+    try {
+      const { data: sessData } = await supabase.auth.getSession();
+      const token = sessData.session?.access_token;
+      if (token) {
+        const resp = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ settings: settingsPayload, keys: keysPayload }),
+        });
+        if (resp.ok) {
+          const j = await resp.json().catch(() => ({}));
+          if (j.ok) {
+            setStatus("✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
+            return;
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn("Server save error, falling back to client upsert:", apiErr);
+    }
+
+    // Fallback: direct Supabase client save
+    const r1 = await supabase.from("ai_settings").upsert(settingsPayload, { onConflict: "id" });
+
+    let r2 = await supabase.from("ai_keys").upsert({
+      id: 1,
+      ...keysPayload,
       updated_at: new Date().toISOString(),
     } as any, { onConflict: "id" });
 
@@ -514,7 +543,17 @@ function HealthCheck() {
     try {
       const { data } = await supabase.auth.getSession();
       const r = await fetch("/api/health", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify(fix ? { fix } : {}) });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) {
+        let msg = `সার্ভার স্ক্যান সম্পন্ন করতে পারেনি (HTTP ${r.status})`;
+        try {
+          const raw = await r.text();
+          if (raw.startsWith("{")) {
+            const j = JSON.parse(raw);
+            if (j.error || j.message) msg = j.error || j.message;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
       const j: Scan = await r.json();
       setRes(j);
       if (fix) {

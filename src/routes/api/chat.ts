@@ -240,9 +240,23 @@ async function handleChat(request: Request): Promise<Response> {
     else if (adminGoogleKey) provider = "google";
   }
 
-  let model = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model)
-    ? parsed.data.model
-    : (s?.model || "").trim();
+  let rawClientModel = typeof parsed.data.model === "string" ? parsed.data.model.trim() : "";
+  let model = "";
+  if (rawClientModel) {
+    if (provider === "google" && rawClientModel.startsWith("gemini-")) {
+      model = normalizeModel("google", rawClientModel);
+    } else if (provider === "groq" && (GROQ_MODELS.some((m) => m.id === rawClientModel) || rawClientModel.startsWith("llama") || rawClientModel.startsWith("openai/gpt-oss"))) {
+      model = normalizeModel("groq", rawClientModel);
+    } else if (provider === "openrouter" && (OPENROUTER_MODELS.some((m) => m.id === rawClientModel) || rawClientModel.includes("/"))) {
+      model = normalizeModel("openrouter", rawClientModel);
+    } else if (provider === "lovable" && LOVABLE_MODELS.some((m) => m.id === rawClientModel)) {
+      model = normalizeModel("lovable", rawClientModel);
+    }
+  }
+  if (!model) {
+    model = normalizeModel(provider, s?.model);
+  }
+
   let url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   let key = adminGoogleKey;
 
@@ -254,11 +268,11 @@ async function handleChat(request: Request): Promise<Response> {
   } else if (provider === "lovable") {
     url = "https://ai.gateway.lovable.dev/v1/chat/completions";
     key = process.env["LOVABLE_API_KEY"] || "";
-    if (!model || /gemini-3/i.test(model)) model = isSiteReq ? "google/gemini-2.5-flash" : DEFAULT_MODELS.lovable;
+    if (!model) model = isSiteReq ? "google/gemini-2.5-flash" : DEFAULT_MODELS.lovable;
   } else if (provider === "groq") {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
-    if (!model || model === "qwen/qwen3.8-27b") model = DEFAULT_MODELS.groq || "openai/gpt-oss-120b";
+    if (!model) model = DEFAULT_MODELS.groq || "openai/gpt-oss-120b";
   } else if (provider === "openrouter") {
     url = "https://openrouter.ai/api/v1/chat/completions";
     key = adminOpenRouterKey;
@@ -266,7 +280,7 @@ async function handleChat(request: Request): Promise<Response> {
   } else {
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
-    if (!model || /^gemini-3/i.test(model)) {
+    if (!model) {
       model = isQuick ? "gemini-2.0-flash" : "gemini-2.5-flash";
     }
   }
@@ -384,7 +398,13 @@ async function handleChat(request: Request): Promise<Response> {
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
   const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
   const attempts: { url: string; key: string; model: string; label: string; isGoogle: boolean; isOpenRouter?: boolean }[] = [];
-  const addGoogle = (k: string, m: string, label: string) => { if (k) attempts.push({ url: googleUrl, key: k, model: normalizeModel("google", m), label, isGoogle: true }); };
+  const addGoogle = (k: string, m: string, label: string) => {
+    if (k) {
+      const norm = normalizeModel("google", m);
+      const url = `${googleUrl}?key=${encodeURIComponent(k)}`;
+      attempts.push({ url, key: k, model: norm, label, isGoogle: true });
+    }
+  };
   const addGroq = (k: string, m: string, label: string) => { if (k) attempts.push({ url: groqUrl, key: k, model: m, label, isGoogle: false }); };
   const addOpenRouter = (k: string, m: string, label: string) => { if (k) attempts.push({ url: openRouterUrl, key: k, model: m, label, isGoogle: false, isOpenRouter: true }); };
 
@@ -456,6 +476,11 @@ async function handleChat(request: Request): Promise<Response> {
     const timer = setTimeout(() => attemptAbortController.abort(), timeoutLimit);
     try {
       const payload: Record<string, unknown> = { ...requestBody, model: attempt.model };
+      if (attempt.isGoogle) {
+        if (typeof payload["max_tokens"] === "number" && (payload["max_tokens"] as number) > 8192) {
+          payload["max_tokens"] = 8192;
+        }
+      }
       if (!attempt.model.includes("astra") && !attempt.model.includes("gpt-5") && !attempt.model.includes("o1") && !attempt.model.includes("o3")) delete payload["reasoning_effort"];
       const headers: Record<string, string> = { Authorization: `Bearer ${attempt.key}`, "Content-Type": "application/json" };
       if (attempt.isGoogle) headers["x-goog-api-key"] = attempt.key;
