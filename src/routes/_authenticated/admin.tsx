@@ -54,9 +54,16 @@ function AdminPage() {
     });
     supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }: { data: any }) => {
       if (data) {
-        setGKey(data.google_key ?? ""); setOKey(data.openai_key ?? "");
-        setORKey(data.openrouter_key ?? "");
-        setPool(Array.isArray(data.key_pool) ? (data.key_pool as unknown as PoolKey[]) : []);
+        setGKey(data.google_key ?? "");
+        setOKey(data.openai_key ?? "");
+        const poolOR = Array.isArray(data.key_pool)
+          ? data.key_pool.find((p: any) => p?.name === "_openrouter_primary" || (p?.provider === "openrouter" && p?.key))?.key
+          : "";
+        setORKey(data.openrouter_key || poolOR || "");
+        const visiblePool = Array.isArray(data.key_pool)
+          ? (data.key_pool as unknown as PoolKey[]).filter((p) => p.name !== "_openrouter_primary")
+          : [];
+        setPool(visiblePool);
       }
     });
   }, [admin]);
@@ -121,11 +128,46 @@ function AdminPage() {
       daily_limit: Math.max(1, s.daily_limit || 1),
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
+
+    const userPool = pool
+      .filter((p) => p.key.trim() && p.name !== "_openrouter_primary")
+      .map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }));
+
     const seen = new Set([gKey.trim(), oKey.trim(), oRKey.trim()].filter(Boolean));
-    const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
-      .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
+    const cleanPool = userPool
+      .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true)))
+      .slice(0, 2);
     setPool(cleanPool);
-    const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), openrouter_key: oRKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() } as any, { onConflict: "id" });
+
+    const enrichedPool = [...cleanPool];
+    if (oRKey.trim()) {
+      enrichedPool.push({
+        name: "_openrouter_primary",
+        provider: "openrouter",
+        key: oRKey.trim(),
+        active: true,
+      });
+    }
+
+    let r2 = await supabase.from("ai_keys").upsert({
+      id: 1,
+      google_key: gKey.trim(),
+      openai_key: oKey.trim(),
+      openrouter_key: oRKey.trim(),
+      key_pool: enrichedPool,
+      updated_at: new Date().toISOString(),
+    } as any, { onConflict: "id" });
+
+    if (r2.error && (r2.error.message?.includes("openrouter_key") || r2.error.code === "PGRST204" || r2.error.message?.includes("schema cache") || r2.error.message?.includes("column"))) {
+      r2 = await supabase.from("ai_keys").upsert({
+        id: 1,
+        google_key: gKey.trim(),
+        openai_key: oKey.trim(),
+        key_pool: enrichedPool,
+        updated_at: new Date().toISOString(),
+      } as any, { onConflict: "id" });
+    }
+
     const err = r1.error || r2.error;
     setStatus(err ? `ত্রুটি: ${err.message}` : "✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
   };
