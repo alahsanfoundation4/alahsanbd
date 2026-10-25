@@ -193,7 +193,11 @@ export const Route = createFileRoute("/api/health")({
           if (provider === "custom" && (!String(body?.base_url ?? "").startsWith("https://") || !String(body?.base_url ?? "").includes("."))) {
             return Response.json({ ok: false, status: 400, latencyMs: 0, message: "HTTPS-সহ বৈধ সার্ভার ঠিকানা দিন" });
           }
-          if (!testKey) {
+          const effectiveKey = provider === "lovable" ? (process.env["LOVABLE_API_KEY"] || "") : testKey;
+          if (!effectiveKey && provider === "lovable") {
+            return Response.json({ ok: false, status: 400, latencyMs: 0, message: "সার্ভারে LOVABLE_API_KEY কনফিগার করা নেই" }, { headers: { "Cache-Control": "no-store" } });
+          }
+          if (!testKey && provider !== "lovable") {
             return Response.json({ ok: false, status: 400, latencyMs: 0, message: "এপিআই কী দেওয়া হয়নি" }, { headers: { "Cache-Control": "no-store" } });
           }
 
@@ -220,7 +224,7 @@ export const Route = createFileRoute("/api/health")({
           } else if (provider === "lovable") {
             testUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
             testModel = body.model?.trim() || "google/gemini-3.8-flash";
-            testHeaders["Authorization"] = `Bearer ${testKey || process.env["LOVABLE_API_KEY"] || ""}`;
+            testHeaders["Authorization"] = `Bearer ${effectiveKey}`;
           } else if (provider === "custom") {
             testUrl = `${String(body.base_url ?? "").replace(/\/$/, "")}/chat/completions`;
             testModel = body.model?.trim() || "gpt-4o";
@@ -229,16 +233,38 @@ export const Route = createFileRoute("/api/health")({
           try {
             const controller = new AbortController();
             const timeoutTimer = setTimeout(() => controller.abort(), 20000);
-            const res = await fetch(testUrl, {
-              method: "POST",
-              headers: testHeaders,
-              body: JSON.stringify({
-                model: testModel,
-                messages: [{ role: "user", content: "ping" }],
-                max_tokens: 5,
-              }),
-              signal: controller.signal,
-            });
+            let res: Response;
+            try {
+              res = await fetch(testUrl, {
+                method: "POST",
+                headers: testHeaders,
+                body: JSON.stringify({
+                  model: testModel,
+                  messages: [{ role: "user", content: "ping" }],
+                  max_tokens: 5,
+                }),
+                signal: controller.signal,
+              });
+            } catch (fetchErr: any) {
+              // If google openai-compat endpoint timed out or failed, try native endpoint as fallback validation
+              if (provider === "google") {
+                const nativeRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(testKey)}`, {
+                  signal: AbortSignal.timeout(6000)
+                }).catch(() => null);
+                if (nativeRes && (nativeRes.ok || nativeRes.status === 200)) {
+                  clearTimeout(timeoutTimer);
+                  return Response.json({
+                    ok: true,
+                    status: 200,
+                    latencyMs: Date.now() - t0,
+                    message: "কী সচল ও কার্যকর (Google Native)",
+                    provider,
+                    model: testModel,
+                  }, { headers: { "Cache-Control": "no-store" } });
+                }
+              }
+              throw fetchErr;
+            }
             clearTimeout(timeoutTimer);
             const latencyMs = Date.now() - t0;
 
