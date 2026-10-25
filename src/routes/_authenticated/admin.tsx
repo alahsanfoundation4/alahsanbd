@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Save, Eye, EyeOff, Activity, CheckCircle2, XCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
 import { GOOGLE_MODELS, LOVABLE_MODELS, GROQ_MODELS, type Provider } from "@/lib/models";
@@ -36,6 +36,7 @@ function AdminPage() {
   const [show, setShow] = useState(false);
   const [pool, setPool] = useState<PoolKey[]>([]);
   const [status, setStatus] = useState("");
+  const [keySignals, setKeySignals] = useState<Record<string, { state: "idle" | "checking" | "ok" | "error"; message?: string; latencyMs?: number }>>({});
 
   useEffect(() => {
     if (!admin) return;
@@ -68,6 +69,22 @@ function AdminPage() {
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
   const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "groq" ? GROQ_MODELS : LOVABLE_MODELS);    
   const models = listFor(s.provider);
+
+  const testKey = async (args: { id: string; provider: string; key: string; model?: string; base_url?: string }) => {
+    setKeySignals((v) => ({ ...v, [args.id]: { state: "checking" } }));
+    try {
+      const { data } = await supabase.auth.getSession();
+      const r = await fetch("/api/health", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
+        body: JSON.stringify({ action: "test_key", provider: args.provider, key: args.key, model: args.model, base_url: args.base_url }),
+      });
+      const result = await r.json();
+      setKeySignals((v) => ({ ...v, [args.id]: { state: result.ok ? "ok" : "error", message: result.message || "টেস্ট ব্যর্থ", latencyMs: result.latencyMs } }));
+    } catch (e: any) {
+      setKeySignals((v) => ({ ...v, [args.id]: { state: "error", message: e?.message || "টেস্ট ব্যর্থ" } }));
+    }
+  };
 
   const save = async () => {
     setStatus("সংরক্ষণ হচ্ছে…");
@@ -143,7 +160,7 @@ function AdminPage() {
           </select>
           <label className="mt-2 block text-xs text-muted-foreground">অথবা নিজে মডেলের নাম লিখুন</label>
           <input value={s.model} onChange={(e) => set("model", e.target.value)} className={`${input} mt-1 text-sm`} />
-          <label className="mt-4 block text-sm text-muted-foreground">চিন্তার গভীরতা (বিল্ট-ইন GPT-6 Astra)</label>
+          <label className="mt-4 block text-sm text-muted-foreground">চিন্তার গভীরতা (এআই-এর উত্তর কতটা বিশদ হবে)</label>
           <select value={s.reasoning_effort} onChange={(e) => set("reasoning_effort", e.target.value)} className={`${input} mt-1`}>
             <option value="low">কম — দ্রুত উত্তর</option>
             <option value="medium">মাঝারি — ভারসাম্য</option>
@@ -159,11 +176,13 @@ function AdminPage() {
               {show ? <EyeOff size={15} /> : <Eye size={15} />} {show ? "লুকান" : "দেখুন"}
             </button>
           </div>
-          <p className={hint}>শুধু অ্যাডমিন দেখতে পান। Google বা Groq মোড বেছে নিলে এই কী ব্যবহার হবে।</p>
+          <p className={hint}>শুধু অ্যাডমিন দেখতে পান। প্রাইমারি প্রোভাইডার ব্যর্থ হলে অন্য প্রোভাইডারের কী-ও ফলব্যাক হিসেবে চেষ্টা হবে। সব কী এই প্যানেল থেকে টেস্ট করা যায়।</p>
          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key</label>
-         <input type={show ? "text" : "password"} value={gKey} onChange={(e) => setGKey(e.target.value)} className={`${input} mt-1`} placeholder="AQ…" />
+         <input type={show ? "text" : "password"} value={gKey} onChange={(e) => { setGKey(e.target.value); setKeySignals((v) => ({ ...v, ["google"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="AQ…" autoComplete="new-password" />
+         <KeySignal id="google" label="Google Gemini" state={keySignals["google"]?.state ?? "idle"} message={keySignals["google"]?.message} latencyMs={keySignals["google"]?.latencyMs} onTest={() => testKey({ id: "google", provider: "google", key: gKey, model: "gemini-3.8-flash" })} disabled={!gKey.trim()} />
          <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (gsk_...)</label>
-         <input type={show ? "text" : "password"} value={oKey} onChange={(e) => setOKey(e.target.value)} className={`${input} mt-1`} placeholder="gsk_..." />
+         <input type={show ? "text" : "password"} value={oKey} onChange={(e) => { setOKey(e.target.value); setKeySignals((v) => ({ ...v, ["groq"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="gsk_..." autoComplete="new-password" />
+         <KeySignal id="groq" label="Groq" state={keySignals["groq"]?.state ?? "idle"} message={keySignals["groq"]?.message} latencyMs={keySignals["groq"]?.latencyMs} onTest={() => testKey({ id: "groq", provider: "groq", key: oKey, model: "openai/gpt-oss-120b" })} disabled={!oKey.trim()} />
 
         </section>
 
@@ -198,7 +217,7 @@ function AdminPage() {
           <label className="mt-3 block text-sm text-muted-foreground">প্রস্তাবিত প্রশ্ন (প্রতি লাইনে একটি)</label>
           <textarea value={s.suggestions} onChange={(e) => set("suggestions", e.target.value)} rows={5} className={`${input} mt-1`} />
         </section>
-        <KeyPool pool={pool} setPool={setPool} show={show} />
+        <KeyPool pool={pool} setPool={setPool} show={show} keySignals={keySignals} setKeySignals={setKeySignals} testKey={testKey} />
         <DriveMemory />
         <FatwaBank />
         <HealthCheck />
@@ -334,7 +353,12 @@ function FatwaBank() {
 
 type PoolKey = { name: string; provider: "google" | "groq" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
-function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
+function KeyPool({ pool, setPool, show, keySignals, setKeySignals, testKey }: {
+  pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean;
+  keySignals: Record<string, { state: "idle" | "checking" | "ok" | "error"; message?: string; latencyMs?: number }>;
+  setKeySignals: React.Dispatch<React.SetStateAction<Record<string, { state: "idle" | "checking" | "ok" | "error"; message?: string; latencyMs?: number }>>>;
+  testKey: (args: { id: string; provider: string; key: string; model?: string; base_url?: string }) => Promise<void>;
+}) {
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
   const upd = (i: number, patch: Partial<PoolKey>) => setPool(pool.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   return (
@@ -348,13 +372,14 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
           <div key={i} className="space-y-2 rounded-xl border border-border p-3">
             <div className="flex min-w-0 gap-2">
               <input value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="নাম (যেমন: Google কী ২)" className={input} />
-              <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
+              <select value={p.provider} onChange={(e) => { upd(i, { provider: e.target.value as PoolKey["provider"] }); setKeySignals((v) => ({ ...v, [`pool-${i}`]: { state: "idle" } })); }} className={`${input} max-w-[9rem]`}>
                 <option value="google">Google</option>
                 <option value="groq">Groq</option>
                <option value="custom">অন্য সেবা</option>
               </select>
             </div>
-            <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
+            <input type={show ? "text" : "password"} value={p.key} onChange={(e) => { upd(i, { key: e.target.value }); setKeySignals((v) => ({ ...v, [`pool-${i}`]: { state: "idle" } })); }} placeholder="এপিআই কী" className={input} autoComplete="new-password" />
+            <KeySignal id={`pool-${i}`} label={p.name || `ব্যাকআপ কী ${i + 1}`} state={keySignals[`pool-${i}`]?.state ?? "idle"} message={keySignals[`pool-${i}`]?.message} latencyMs={keySignals[`pool-${i}`]?.latencyMs} onTest={() => testKey({ id: `pool-${i}`, provider: p.provider, key: p.key, model: p.model ?? "", base_url: p.base_url ?? "" })} disabled={!p.key.trim()} />
             {p.provider === "custom" && (
               <div className="flex gap-2">
                 <input value={p.base_url ?? ""} onChange={(e) => upd(i, { base_url: e.target.value })} placeholder="ঠিকানা, যেমন https://api.groq.com/openai/v1" className={input} />
@@ -373,6 +398,27 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
       {pool.length < 2 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
         className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm text-primary">+ নতুন কী যোগ করুন</button>}
     </section>
+  );
+}
+
+
+function KeySignal({ id, label, state, message, latencyMs, onTest, disabled }: {
+  id: string; label: string; state: "idle" | "checking" | "ok" | "error";
+  message: string | undefined; latencyMs: number | undefined; onTest: () => void; disabled: boolean;
+}) {
+  const Icon = state === "ok" ? CheckCircle2 : state === "error" ? XCircle : state === "checking" ? RefreshCw : Activity;
+  const color = state === "ok" ? "text-emerald-500" : state === "error" ? "text-destructive" : state === "checking" ? "text-amber-500" : "text-muted-foreground";
+  const labelText = state === "ok" ? `সচল${latencyMs ? ` · ${latencyMs}ms` : ""}` : state === "error" ? (message || "কাজ করছে না") : state === "checking" ? "পরীক্ষা চলছে…" : "এখনো পরীক্ষা করা হয়নি";
+  return (
+    <div data-key-signal={id} className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background/60 px-3 py-2">
+      <div className={`flex min-w-0 items-center gap-2 text-xs ${color}`}>
+        <Icon size={15} className={state === "checking" ? "animate-spin" : ""} />
+        <span className="font-medium">{label}:</span><span>{labelText}</span>
+      </div>
+      <button type="button" onClick={onTest} disabled={disabled || state === "checking"} className="flex items-center gap-1 rounded-md border border-primary/50 px-2.5 py-1 text-xs text-primary disabled:opacity-50">
+        <Activity size={13} /> Test connection
+      </button>
+    </div>
   );
 }
 
