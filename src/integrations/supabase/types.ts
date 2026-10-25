@@ -20,6 +20,7 @@ export type Database = {
           id: number
           key_pool: Json
           openai_key: string
+          openrouter_key: string
           updated_at: string
         }
         Insert: {
@@ -27,6 +28,7 @@ export type Database = {
           id?: number
           key_pool?: Json
           openai_key?: string
+          openrouter_key?: string
           updated_at?: string
         }
         Update: {
@@ -34,6 +36,7 @@ export type Database = {
           id?: number
           key_pool?: Json
           openai_key?: string
+          openrouter_key?: string
           updated_at?: string
         }
         Relationships: []

@@ -28,6 +28,7 @@ async function chatCall(url: string, key: string, model: string, content: unknow
 
 function classify(status: number, text: string) {
   const t = text.toLowerCase();
+  if (status === 402) return "Lovable AI Gateway-এ AI credit উপলব্ধ নেই (HTTP 402); workspace credit/AI allowance পরীক্ষা করুন";
   if (status === 429 || /rate|quota|exhausted/.test(t)) return "সাময়িক রেট লিমিট (ক্রেডিট শেষ নয়)";
   if (status === 401 || status === 403 || /api key|permission/.test(t)) return "কী অবৈধ বা অনুমতি নেই";
   if (status === 404 || /not found|no longer/.test(t)) return "মডেল আর পাওয়া যায় না";
@@ -282,7 +283,9 @@ export const Route = createFileRoute("/api/health")({
 
             const errText = (await res.text().catch(() => "")).slice(0, 300);
             let msg = classify(res.status, errText);
-            if (res.status === 401 || res.status === 403) {
+            if (res.status === 402 && provider === "lovable") {
+              msg = "Lovable AI Gateway-এ AI credit উপলব্ধ নেই (HTTP 402); workspace credit/AI allowance পরীক্ষা করুন";
+            } else if (res.status === 401 || res.status === 403) {
               msg = "কী মেয়াদোত্তীর্ণ বা অনুমতি নেই";
             } else if (res.status === 429) {
               msg = "কোটা শেষ বা রেট লিমিট";
