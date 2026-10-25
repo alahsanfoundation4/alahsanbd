@@ -244,7 +244,7 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
       } else if (provider === "groq") {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
-    if (!model || model.startsWith("llama")) model = DEFAULT_MODELS.groq || "qwen/qwen3.8-27b";
+    if (!model || model === "qwen/qwen3.8-27b") model = DEFAULT_MODELS.groq || "openai/gpt-oss-120b";
   } else {
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
@@ -401,14 +401,14 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
     }
 
         if (url.includes("groq.com") && key) {
-      const altGroq = model === "qwen/qwen3.8-27b" ? "openai/gpt-oss-120b" : "qwen/qwen3.8-27b";
+      const altGroq = model === "openai/gpt-oss-120b" ? "openai/gpt-oss-20b" : "openai/gpt-oss-120b";
       attempts.push({ url, key, model: altGroq, label: "groq-stepdown", isGoogle: false });
     }
     if (url.includes("generativelanguage") && key) {
       attempts.push({ url, key, model: "gemini-3-flash-preview", label: "google-flash-fallback", isGoogle: true });
     }
 
-    if (process.env["LOVABLE_API_KEY"]) {
+    if (provider === "lovable" && process.env["LOVABLE_API_KEY"]) {
       attempts.push({
         url: "https://ai.gateway.lovable.dev/v1/chat/completions",
         key: process.env["LOVABLE_API_KEY"],
@@ -429,7 +429,7 @@ const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || 
     if (badKeys.has(attempt.key)) continue;
 
     // টাইমআউট সীমা: সাধারণ প্রশ্নে ৬ সে., ইঞ্জিনিয়ারিং বা বড় কোডে ১৮ সে.
-    const timeoutLimit = isQuick ? 6000 : 18000;
+    const timeoutLimit = isQuick ? 25000 : 45000;
     const attemptAbortController = new AbortController();
     const timer = setTimeout(() => attemptAbortController.abort(), timeoutLimit);
 
