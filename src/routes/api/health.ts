@@ -13,10 +13,12 @@ const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-3-flash-preview"];
 const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const TABLES = ["ai_settings", "ai_keys", "conversations", "messages", "pages", "health_checks", "chat_usage", "user_roles", "user_memories"];
 
-async function chatCall(url: string, key: string, model: string, content: unknown) {
+async function chatCall(url: string, key: string, model: string, content: unknown, isGoogle = false) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  if (isGoogle && key) headers["x-goog-api-key"] = key;
   const r = await fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
     signal: AbortSignal.timeout(25000),
   }).catch((e) => new Response(String(e), { status: 599 }));
@@ -37,9 +39,10 @@ function classify(status: number, text: string) {
 function chatTarget(ctx: Ctx) {
   const provider = ctx.settings?.provider ?? "google";
   const model = ctx.settings?.model ?? "gemini-3.8-flash";
-  if (provider === "google") return { url: GOOGLE_CHAT, key: ctx.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"], model, provider };
-  if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", key: ctx.keys?.openai_key?.trim() || process.env["GROQ_API_KEY"], model, provider };
-  return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model, provider };
+  if (provider === "google") return { url: GOOGLE_CHAT, key: ctx.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"], model, provider, isGoogle: true };
+  if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", key: ctx.keys?.openai_key?.trim() || process.env["GROQ_API_KEY"], model, provider, isGoogle: false };
+  if (provider === "openrouter") return { url: "https://openrouter.ai/api/v1/chat/completions", key: ctx.keys?.openrouter_key?.trim() || process.env["OPENROUTER_API_KEY"], model: model || "openrouter/free", provider, isGoogle: false };
+  return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model, provider, isGoogle: false };
 }
 
 const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
@@ -58,7 +61,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   async chat(c) {
     const t = chatTarget(c);
     if (!t.key) return void c.issues.push({ id: "chat:nokey", area: "চ্যাট", title: `${t.provider} কী সেট করা নেই`, detail: "অ্যাডমিন প্যানেলে কী দিন" });
-    const r = await chatCall(t.url, t.key, t.model, "Reply with: ok");
+    const r = await chatCall(t.url, t.key, t.model, "Reply with: ok", t.isGoogle);
     if (r.ok) return void c.passed.push(`চ্যাট (${t.model})`);
     const why = classify(r.status, r.text);
     c.issues.push({
@@ -69,7 +72,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   async vision(c) {
     const t = chatTarget(c);
     if (!t.key) return;
-    const r = await chatCall(t.url, t.key, t.model, [{ type: "text", text: "What color? one word" }, { type: "image_url", image_url: { url: TINY_PNG } }]);
+    const r = await chatCall(t.url, t.key, t.model, [{ type: "text", text: "What color? one word" }, { type: "image_url", image_url: { url: TINY_PNG } }], t.isGoogle);
     if (r.ok) return void c.passed.push("ছবি বিশ্লেষণ");
     c.issues.push({ id: "vision", area: "ছবি", title: `ছবি বোঝা যাচ্ছে না — ${classify(r.status, r.text)}`, detail: r.text.slice(0, 160), ...(t.provider === "google" && r.status === 404 ? { fix: "switch_model", fixLabel: "সমাধান করুন" } : {}) });
   },
@@ -184,7 +187,7 @@ export const Route = createFileRoute("/api/health")({
         if (body?.action === "test_key") {
           const testKey = typeof body?.key === "string" ? body.key.trim() : "";
           const provider = (body?.provider || "google") as string;
-          if (!["google", "groq", "custom"].includes(provider)) {
+          if (!["google", "groq", "openrouter", "lovable", "custom"].includes(provider)) {
             return Response.json({ ok: false, status: 400, latencyMs: 0, message: "অজানা প্রোভাইডার" });
           }
           if (provider === "custom" && (!String(body?.base_url ?? "").startsWith("https://") || !String(body?.base_url ?? "").includes("."))) {
@@ -209,6 +212,15 @@ export const Route = createFileRoute("/api/health")({
           } else if (provider === "groq") {
             testUrl = "https://api.groq.com/openai/v1/chat/completions";
             testModel = body.model?.trim() || "openai/gpt-oss-120b";
+          } else if (provider === "openrouter") {
+            testUrl = "https://openrouter.ai/api/v1/chat/completions";
+            testModel = body.model?.trim() || "openrouter/free";
+            testHeaders["HTTP-Referer"] = "https://alahsanbd.com";
+            testHeaders["X-Title"] = "Al-Ahsan AI";
+          } else if (provider === "lovable") {
+            testUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+            testModel = body.model?.trim() || "google/gemini-3.8-flash";
+            testHeaders["Authorization"] = `Bearer ${testKey || process.env["LOVABLE_API_KEY"] || ""}`;
           } else if (provider === "custom") {
             testUrl = `${String(body.base_url ?? "").replace(/\/$/, "")}/chat/completions`;
             testModel = body.model?.trim() || "gpt-4o";
@@ -216,7 +228,7 @@ export const Route = createFileRoute("/api/health")({
 
           try {
             const controller = new AbortController();
-            const timeoutTimer = setTimeout(() => controller.abort(), 12000);
+            const timeoutTimer = setTimeout(() => controller.abort(), 20000);
             const res = await fetch(testUrl, {
               method: "POST",
               headers: testHeaders,

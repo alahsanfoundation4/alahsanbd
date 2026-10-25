@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
 import { buildSearchQuery, FOLLOWUP_SEARCH } from "@/lib/search-query";
 const Body = z.object({
@@ -220,11 +220,20 @@ async function handleChat(request: Request): Promise<Response> {
   void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
 
   let provider: Provider = (s?.provider ?? "google") as Provider;
-  if (!["google", "groq", "lovable"].includes(provider)) provider = "google";
+  if (!["google", "groq", "openrouter", "lovable"].includes(provider)) provider = "google";
   const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
   const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || "";
-  if (provider === "google" && !adminGoogleKey && adminGroqKey) provider = "groq";
-  else if (provider === "groq" && !adminGroqKey && adminGoogleKey) provider = "google";
+  const adminOpenRouterKey = (keys as any)?.openrouter_key?.trim() || process.env["OPENROUTER_API_KEY"] || "";
+  if (provider === "google" && !adminGoogleKey) {
+    if (adminGroqKey) provider = "groq";
+    else if (adminOpenRouterKey) provider = "openrouter";
+  } else if (provider === "groq" && !adminGroqKey) {
+    if (adminGoogleKey) provider = "google";
+    else if (adminOpenRouterKey) provider = "openrouter";
+  } else if (provider === "openrouter" && !adminOpenRouterKey) {
+    if (adminGroqKey) provider = "groq";
+    else if (adminGoogleKey) provider = "google";
+  }
 
   let model = parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model)
     ? parsed.data.model
@@ -245,6 +254,10 @@ async function handleChat(request: Request): Promise<Response> {
     url = "https://api.groq.com/openai/v1/chat/completions";
     key = adminGroqKey;
     if (!model || model === "qwen/qwen3.8-27b") model = DEFAULT_MODELS.groq || "openai/gpt-oss-120b";
+  } else if (provider === "openrouter") {
+    url = "https://openrouter.ai/api/v1/chat/completions";
+    key = adminOpenRouterKey;
+    if (!model) model = DEFAULT_MODELS.openrouter || "openrouter/free";
   } else {
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
     key = adminGoogleKey;
@@ -364,9 +377,11 @@ async function handleChat(request: Request): Promise<Response> {
     .filter((p) => p && p.active !== false && p.key?.trim()).slice(0, 2);
   const googleUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-  const attempts: { url: string; key: string; model: string; label: string; isGoogle: boolean }[] = [];
+  const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
+  const attempts: { url: string; key: string; model: string; label: string; isGoogle: boolean; isOpenRouter?: boolean }[] = [];
   const addGoogle = (k: string, m: string, label: string) => { if (k) attempts.push({ url: googleUrl, key: k, model: m, label, isGoogle: true }); };
   const addGroq = (k: string, m: string, label: string) => { if (k) attempts.push({ url: groqUrl, key: k, model: m, label, isGoogle: false }); };
+  const addOpenRouter = (k: string, m: string, label: string) => { if (k) attempts.push({ url: openRouterUrl, key: k, model: m, label, isGoogle: false, isOpenRouter: true }); };
 
   if (provider === "google" || isEngineer) {
     addGoogle(adminGoogleKey, isEngineer ? "gemini-3.8-flash" : (model || (isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash")), "google-primary");
@@ -377,18 +392,37 @@ async function handleChat(request: Request): Promise<Response> {
       addGroq(adminGroqKey, "openai/gpt-oss-20b", "groq-cross-fallback-lite");
       addGroq(adminGroqKey, "llama-3.3-70b-versatile", "groq-cross-fallback-llama");
     }
+    if (adminOpenRouterKey) {
+      addOpenRouter(adminOpenRouterKey, "openrouter/free", "openrouter-cross-fallback");
+      addOpenRouter(adminOpenRouterKey, "google/gemma-4-31b-it:free", "openrouter-cross-fallback-gemma");
+    }
   } else if (provider === "groq") {
     addGroq(adminGroqKey, model || "openai/gpt-oss-120b", "groq-primary");
     addGroq(adminGroqKey, "openai/gpt-oss-20b", "groq-fallback");
     addGroq(adminGroqKey, "llama-3.3-70b-versatile", "groq-llama-fallback");
+    if (adminOpenRouterKey) {
+      addOpenRouter(adminOpenRouterKey, "openrouter/free", "openrouter-cross-fallback");
+      addOpenRouter(adminOpenRouterKey, "google/gemma-4-31b-it:free", "openrouter-cross-fallback-gemma");
+    }
     if (adminGoogleKey && adminGoogleKey !== adminGroqKey) {
       addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-cross-fallback");
       addGoogle(adminGoogleKey, "gemini-3.5-flash-lite", "google-cross-fallback-lite");
     }
+  } else if (provider === "openrouter") {
+    addOpenRouter(adminOpenRouterKey, model || "openrouter/free", "openrouter-primary");
+    addOpenRouter(adminOpenRouterKey, "google/gemma-4-31b-it:free", "openrouter-fallback-gemma");
+    addOpenRouter(adminOpenRouterKey, "nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter-fallback-nvidia");
+    if (adminGroqKey) {
+      addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-cross-fallback");
+    }
+    if (adminGoogleKey) {
+      addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-cross-fallback");
+    }
   } else {
     if (process.env["LOVABLE_API_KEY"]) attempts.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model: model || (isSiteReq ? "google/gemini-3.8-flash" : DEFAULT_MODELS.lovable), label: "lovable-primary", isGoogle: false });
-    addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-fallback");
+    addOpenRouter(adminOpenRouterKey, "openrouter/free", "openrouter-fallback");
     addGroq(adminGroqKey, "openai/gpt-oss-120b", "groq-fallback");
+    addGoogle(adminGoogleKey, "gemini-3.8-flash", "google-fallback");
   }
 
   // Pool entries remain supplemental and may be used for their explicitly selected provider.
@@ -396,7 +430,11 @@ async function handleChat(request: Request): Promise<Response> {
     const pKey = p.key!.trim();
     if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
       attempts.push({ url: p.base_url.replace(/\/$/, "") + "/chat/completions", key: pKey, model: p.model?.trim() || model, label: p.name || "custom-pool", isGoogle: false });
-    } else if (p.provider === "groq") addGroq(pKey, p.model?.trim() || "openai/gpt-oss-120b", p.name || "groq-pool");
+    } else if (p.provider === "groq") {
+      addGroq(pKey, p.model?.trim() || "openai/gpt-oss-120b", p.name || "groq-pool");
+    } else if (p.provider === "openrouter") {
+      addOpenRouter(pKey, p.model?.trim() || "openrouter/free", p.name || "openrouter-pool");
+    }
     else addGoogle(pKey, p.model?.trim() || "gemini-3.8-flash", p.name || "google-pool");
   }
 
@@ -415,6 +453,10 @@ async function handleChat(request: Request): Promise<Response> {
       if (!attempt.model.includes("astra") && !attempt.model.includes("gpt-5") && !attempt.model.includes("o1") && !attempt.model.includes("o3")) delete payload["reasoning_effort"];
       const headers: Record<string, string> = { Authorization: `Bearer ${attempt.key}`, "Content-Type": "application/json" };
       if (attempt.isGoogle) headers["x-goog-api-key"] = attempt.key;
+      if (attempt.isOpenRouter) {
+        headers["HTTP-Referer"] = "https://alahsanbd.com";
+        headers["X-Title"] = "Al-Ahsan AI";
+      }
       let res = await fetch(attempt.url, { method: "POST", headers, body: JSON.stringify(payload), signal: attemptAbortController.signal });
       if (res.status === 400 && payload["reasoning_effort"]) {
         delete payload["reasoning_effort"];

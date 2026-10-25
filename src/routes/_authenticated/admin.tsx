@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff, Activity, CheckCircle2, XCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, GROQ_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -33,6 +33,7 @@ function AdminPage() {
   const [s, setS] = useState<S | null>(null);
   const [gKey, setGKey] = useState("");
   const [oKey, setOKey] = useState("");
+  const [oRKey, setORKey] = useState("");
   const [show, setShow] = useState(false);
   const [pool, setPool] = useState<PoolKey[]>([]);
   const [status, setStatus] = useState("");
@@ -45,9 +46,10 @@ function AdminPage() {
       setStatus(error ? `সেটিংস আনা যায়নি: ${error.message}` : "");
       setS({ admin_note: "", system_prompt: "", provider: "lovable", model: "", hourly_limit: 30, daily_limit: 200, reasoning_effort: "low", welcome_title: "", welcome_subtitle: "", suggestions: "", url_reader: true, site_builder: true, chat_enabled: true });
     });
-    supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
+    supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }: { data: any }) => {
       if (data) {
-        setGKey(data.google_key); setOKey(data.openai_key);
+        setGKey(data.google_key ?? ""); setOKey(data.openai_key ?? "");
+        setORKey(data.openrouter_key ?? "");
         setPool(Array.isArray(data.key_pool) ? (data.key_pool as unknown as PoolKey[]) : []);
       }
     });
@@ -67,7 +69,7 @@ function AdminPage() {
   if (!s) return <div className="min-h-screen bg-background p-8 text-muted-foreground">লোড হচ্ছে…</div>;
 
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
-  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "groq" ? GROQ_MODELS : LOVABLE_MODELS);    
+  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "groq" ? GROQ_MODELS : p === "openrouter" ? OPENROUTER_MODELS : LOVABLE_MODELS);    
   const models = listFor(s.provider);
 
   const testKey = async (args: { id: string; provider: string; key: string; model?: string; base_url?: string }) => {
@@ -95,11 +97,11 @@ function AdminPage() {
       daily_limit: Math.max(1, s.daily_limit || 1),
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
-    const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
+    const seen = new Set([gKey.trim(), oKey.trim(), oRKey.trim()].filter(Boolean));
     const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
       .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
     setPool(cleanPool);
-    const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), openrouter_key: oRKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() } as any, { onConflict: "id" });
     const err = r1.error || r2.error;
     setStatus(err ? `ত্রুটি: ${err.message}` : "✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
   };
@@ -147,10 +149,10 @@ function AdminPage() {
 
         <section className={card}>
           <h2 className={h2}>৩. এআই মোড, মডেল ও চিন্তার গভীরতা</h2>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {([["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["groq", "Groq"]] as const).map(([p, l]) => (
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {([["lovable", "বিল্ট-ইন"], ["google", "Google"], ["groq", "Groq"], ["openrouter", "OpenRouter"]] as const).map(([p, l]) => (
               <button key={p} onClick={() => setS({ ...s, provider: p, model: listFor(p)[0]?.id ?? "" })}
-                className={`rounded-lg border px-3 py-3 text-sm ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border"}`}>{l}</button>
+                className={`rounded-lg border px-2.5 py-2.5 text-xs sm:text-sm font-medium transition-colors text-center ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border hover:bg-muted/50"}`}>{l}</button>
             ))}
           </div>
           <label className="mt-4 block text-sm text-muted-foreground">মডেল</label>
@@ -183,6 +185,12 @@ function AdminPage() {
          <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (gsk_...)</label>
          <input type={show ? "text" : "password"} value={oKey} onChange={(e) => { setOKey(e.target.value); setKeySignals((v) => ({ ...v, ["groq"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="gsk_..." autoComplete="new-password" />
          <KeySignal id="groq" label="Groq" state={keySignals["groq"]?.state ?? "idle"} message={keySignals["groq"]?.message} latencyMs={keySignals["groq"]?.latencyMs} onTest={() => testKey({ id: "groq", provider: "groq", key: oKey, model: "openai/gpt-oss-120b" })} disabled={!oKey.trim()} />
+         <label className="mt-3 block text-sm text-muted-foreground">OpenRouter API Key (sk-or-...)</label>
+         <input type={show ? "text" : "password"} value={oRKey} onChange={(e) => { setORKey(e.target.value); setKeySignals((v) => ({ ...v, ["openrouter"]: { state: "idle" } })); }} className={`${input} mt-1`} placeholder="sk-or-v1-..." autoComplete="new-password" />
+         <KeySignal id="openrouter" label="OpenRouter" state={keySignals["openrouter"]?.state ?? "idle"} message={keySignals["openrouter"]?.message} latencyMs={keySignals["openrouter"]?.latencyMs} onTest={() => testKey({ id: "openrouter", provider: "openrouter", key: oRKey, model: "openrouter/free" })} disabled={!oRKey.trim()} />
+         <label className="mt-3 block text-sm text-muted-foreground">বিল্ট-ইন (Lovable AI Gateway)</label>
+         <p className="text-xs text-muted-foreground mt-0.5">সার্ভারের নিজস্ব গেটওয়ে সংযোগ (আলাদা এপিআই কী দিতে হয় না)</p>
+         <KeySignal id="lovable" label="বিল্ট-ইন গেটওয়ে" state={keySignals["lovable"]?.state ?? "idle"} message={keySignals["lovable"]?.message} latencyMs={keySignals["lovable"]?.latencyMs} onTest={() => testKey({ id: "lovable", provider: "lovable", key: "builtin", model: "google/gemini-3.8-flash" })} disabled={false} />
 
         </section>
 
@@ -351,7 +359,7 @@ function FatwaBank() {
 }
 
 
-type PoolKey = { name: string; provider: "google" | "groq" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "groq" | "openrouter" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show, keySignals, setKeySignals, testKey }: {
   pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean;
@@ -375,7 +383,8 @@ function KeyPool({ pool, setPool, show, keySignals, setKeySignals, testKey }: {
               <select value={p.provider} onChange={(e) => { upd(i, { provider: e.target.value as PoolKey["provider"] }); setKeySignals((v) => ({ ...v, [`pool-${i}`]: { state: "idle" } })); }} className={`${input} max-w-[9rem]`}>
                 <option value="google">Google</option>
                 <option value="groq">Groq</option>
-               <option value="custom">অন্য সেবা</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="custom">অন্য সেবা</option>
               </select>
             </div>
             <input type={show ? "text" : "password"} value={p.key} onChange={(e) => { upd(i, { key: e.target.value }); setKeySignals((v) => ({ ...v, [`pool-${i}`]: { state: "idle" } })); }} placeholder="এপিআই কী" className={input} autoComplete="new-password" />
