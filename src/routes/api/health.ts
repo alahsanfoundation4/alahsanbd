@@ -44,7 +44,14 @@ function chatTarget(ctx: Ctx) {
   const model = normalizeModel(provider, rawModel);
   if (provider === "google") return { url: GOOGLE_CHAT, key: ctx.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"], model, provider, isGoogle: true };
   if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", key: ctx.keys?.openai_key?.trim() || process.env["GROQ_API_KEY"], model, provider, isGoogle: false };
-  if (provider === "openrouter") return { url: "https://openrouter.ai/api/v1/chat/completions", key: ctx.keys?.openrouter_key?.trim() || process.env["OPENROUTER_API_KEY"], model: model || "openrouter/free", provider, isGoogle: false };
+  if (provider === "openrouter") {
+    const orKey = ctx.keys?.openrouter_key?.trim() ||
+      (Array.isArray(ctx.keys?.key_pool)
+        ? ctx.keys.key_pool.find((p: any) => (p?.name === "_openrouter_primary" || p?.provider === "openrouter") && p?.active !== false && p?.key)?.key?.trim()
+        : "") ||
+      process.env["OPENROUTER_API_KEY"];
+    return { url: "https://openrouter.ai/api/v1/chat/completions", key: orKey, model: model || "openrouter/free", provider, isGoogle: false };
+  }
   return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: process.env["LOVABLE_API_KEY"], model, provider, isGoogle: false };
 }
 
@@ -80,7 +87,8 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
     c.issues.push({ id: "vision", area: "ছবি", title: `ছবি বোঝা যাচ্ছে না — ${classify(r.status, r.text)}`, detail: r.text.slice(0, 160), ...(t.provider === "google" && r.status === 404 ? { fix: "switch_model", fixLabel: "সমাধান করুন" } : {}) });
   },
   async pool(c) {
-    const pool: any[] = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
+    const pool: any[] = (Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [])
+      .filter((p) => p?.name !== "_openrouter_primary");
     await Promise.all(pool.map(async (p, i) => {
       if (p?.active === false || !p?.key?.trim()) return;
       const url = p.provider === "custom" ? `${String(p.base_url ?? "").replace(/\/$/, "")}/chat/completions` : p.provider === "openai" ? "https://api.openai.com/v1/chat/completions" : GOOGLE_CHAT;
@@ -108,8 +116,10 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
     c.passed.push("বিল্ট-ইন এআই (ছবি/স্মৃতি/ব্যাকআপ) প্রস্তুত");
   },
   async keys(c) {
-    const pool: any[] = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
-    const all = [c.keys?.google_key, c.keys?.openai_key, ...pool.map((p) => p?.key)].map((k) => String(k ?? "").trim()).filter(Boolean);
+    const pool: any[] = (Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [])
+      .filter((p) => p?.name !== "_openrouter_primary");
+    const orKey = c.keys?.openrouter_key || (Array.isArray(c.keys?.key_pool) ? c.keys.key_pool.find((p: any) => p?.name === "_openrouter_primary")?.key : "");
+    const all = [c.keys?.google_key, c.keys?.openai_key, orKey, ...pool.map((p) => p?.key)].map((k) => String(k ?? "").trim()).filter(Boolean);
     if (new Set(all).size !== all.length) c.issues.push({ id: "keys:dup", area: "কী", title: "একই এপিআই কী একাধিকবার আছে", detail: "সেটিংসে গিয়ে সংরক্ষণ করুন — ডুপ্লিকেট স্বয়ংক্রিয়ভাবে বাদ যাবে" });
     else if (pool.length > 2) c.issues.push({ id: "keys:many", area: "কী", title: `ব্যাকআপ কী ${pool.length}টি — সর্বোচ্চ ২টি রাখুন`, detail: "সেটিংসে সংরক্ষণ করলে প্রথম ২টি থাকবে" });
     else c.passed.push("এপিআই কী ব্যবস্থাপনা");
@@ -299,7 +309,57 @@ export const Route = createFileRoute("/api/health")({
             }
           }
 
-          // Other providers (Groq, OpenRouter, Lovable AI Gateway, Custom)
+          // Dedicated high-speed test for OpenRouter key validity
+          if (provider === "openrouter") {
+            try {
+              const authRes = await fetch("https://openrouter.ai/api/v1/auth/key", {
+                headers: {
+                  Authorization: `Bearer ${testKey}`,
+                  "HTTP-Referer": "https://alahsanbd.com",
+                  "X-Title": "Al-Ahsan AI",
+                },
+                signal: AbortSignal.timeout(6000),
+              });
+              const authLatencyMs = Date.now() - t0;
+              if (authRes.ok) {
+                return Response.json({
+                  ok: true,
+                  status: 200,
+                  latencyMs: authLatencyMs,
+                  message: `OpenRouter কী সচল · ${authLatencyMs} ms`,
+                  provider,
+                  model: body.model?.trim() || "openrouter/free",
+                }, { headers: { "Cache-Control": "no-store" } });
+              }
+              const errText = (await authRes.text().catch(() => "")).slice(0, 300);
+              let msg = "OpenRouter কী অবৈধ বা ভুল";
+              if (authRes.status === 401) msg = "OpenRouter এপিআই কী ভুল বা নিষ্ক্রিয়";
+              else if (authRes.status === 402) msg = "OpenRouter অ্যাকাউন্টে ক্রেডিটের প্রয়োজন";
+              else if (authRes.status === 429) msg = "OpenRouter রেট লিমিট অতিক্রম হয়েছে";
+              return Response.json({
+                ok: false,
+                status: authRes.status,
+                latencyMs: authLatencyMs,
+                message: msg,
+                detail: errText,
+                provider,
+                model: body.model?.trim() || "openrouter/free",
+              }, { headers: { "Cache-Control": "no-store" } });
+            } catch (err: any) {
+              const isTimeout = err?.name === "AbortError";
+              return Response.json({
+                ok: false,
+                status: isTimeout ? 504 : 500,
+                latencyMs: Date.now() - t0,
+                message: isTimeout ? "OpenRouter সময়সীমা শেষ (Timeout)" : "OpenRouter সার্ভারে সংযোগ স্থাপন করা যায়নি",
+                detail: String(err?.message || err),
+                provider,
+                model: body.model?.trim() || "openrouter/free",
+              }, { headers: { "Cache-Control": "no-store" } });
+            }
+          }
+
+          // Other providers (Groq, Lovable AI Gateway, Custom)
           let testUrl = "";
           let testModel = "";
           const testHeaders: Record<string, string> = {
@@ -310,11 +370,6 @@ export const Route = createFileRoute("/api/health")({
           if (provider === "groq") {
             testUrl = "https://api.groq.com/openai/v1/chat/completions";
             testModel = body.model?.trim() || "openai/gpt-oss-120b";
-          } else if (provider === "openrouter") {
-            testUrl = "https://openrouter.ai/api/v1/chat/completions";
-            testModel = body.model?.trim() || "openrouter/free";
-            testHeaders["HTTP-Referer"] = "https://alahsanbd.com";
-            testHeaders["X-Title"] = "Al-Ahsan AI";
           } else if (provider === "lovable") {
             testUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
             testModel = body.model?.trim() || "openai/gpt-6-astra";

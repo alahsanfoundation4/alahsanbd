@@ -223,7 +223,11 @@ async function handleChat(request: Request): Promise<Response> {
   if (!["google", "groq", "openrouter", "lovable"].includes(provider)) provider = "google";
   const adminGoogleKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"] || "";
   const adminGroqKey = keys?.openai_key?.trim() || process.env["GROQ_API_KEY"] || "";
-  const adminOpenRouterKey = (keys as any)?.openrouter_key?.trim() || process.env["OPENROUTER_API_KEY"] || "";
+  const adminOpenRouterKey = (keys as any)?.openrouter_key?.trim() ||
+    (Array.isArray((keys as any)?.key_pool)
+      ? ((keys as any).key_pool.find((p: any) => (p?.name === "_openrouter_primary" || p?.provider === "openrouter") && p?.active !== false && p?.key)?.key?.trim())
+      : "") ||
+    process.env["OPENROUTER_API_KEY"] || "";
   if (provider === "google" && !adminGoogleKey) {
     if (adminGroqKey) provider = "groq";
     else if (adminOpenRouterKey) provider = "openrouter";
@@ -374,7 +378,7 @@ async function handleChat(request: Request): Promise<Response> {
 
   type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
   const pool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
-    .filter((p) => p && p.active !== false && p.key?.trim()).slice(0, 2);
+    .filter((p) => p && p.active !== false && p.key?.trim() && p.name !== "_openrouter_primary").slice(0, 2);
   const googleUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
   const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
